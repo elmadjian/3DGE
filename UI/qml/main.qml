@@ -12,14 +12,13 @@ Window {
     width: 1050
     height: 500
     color: "#202020"
-    title: qsTr("V-Switch Eye Tracker")
+    title: qsTr("3D Gaze Eye Tracker")
     Universal.theme: Universal.Dark
     Universal.accent: Universal.Lime
     // @disable-check M16
     onClosing: {
         console.log("closing window");
-        calibControl.save_session();
-        //calibHMD.save_session();
+        calibHMD.save_session();
         if (leftEyeGroup.video || rightEyeGroup.video) {
             camManager.stop_cameras(true);
         } else {
@@ -316,7 +315,7 @@ Window {
 
         ColumnLayout {
             x: 18
-            y:10
+            y:0
             Layout.fillHeight: false
             Layout.fillWidth: false
             Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
@@ -418,7 +417,7 @@ Window {
 
         ColumnLayout{
             x: 13
-            y: 10
+            y: 0
             width: 65
             height: 60
             Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
@@ -499,7 +498,7 @@ Window {
 
         ColumnLayout {
             x: 127
-            y: 10
+            y: 0
             width: 65
             height: 60
             Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
@@ -590,7 +589,7 @@ Window {
         }
         ColumnLayout {
             x: 12
-            y:10
+            y:0
             Layout.fillHeight: false
             Layout.fillWidth: false
             Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
@@ -656,7 +655,7 @@ Window {
         }
         ColumnLayout {
             x: 121
-            y:10
+            y:0
             width: 60
             Layout.fillHeight: false
             Layout.fillWidth: false
@@ -684,7 +683,7 @@ Window {
         //------------
         ColumnLayout {
             x: 226
-            y:10
+            y:0
             width: 60
             Layout.fillHeight: false
             Layout.fillWidth: false
