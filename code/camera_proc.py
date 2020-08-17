@@ -19,7 +19,7 @@ class Camera(QQuickImageProvider, QObject):
     def __init__(self, name=None):
         QQuickImageProvider.__init__(self, QQuickImageProvider.Pixmap)
         QObject.__init__(self)
-        self.__image = self.to_QPixmap(cv2.imread("../UI/test.jpg"))
+        self.__image = self.to_QPixmap(cv2.imread("../UI/imgs/test.jpg"))
         self.__np_img = None
         self.name = name
         self.capturing = Value('i', 0)

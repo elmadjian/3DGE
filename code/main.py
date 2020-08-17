@@ -44,7 +44,7 @@ if __name__=='__main__':
     engine.addImageProvider('sceneimg', scene_cam)
     engine.addImageProvider('leyeimg', le_cam)
     engine.addImageProvider('reyeimg', re_cam)
-    engine.load(QUrl("../UI/v_switch/main.qml"))
+    engine.load(QUrl("../UI/qml/main.qml"))
 
 
     if not engine.rootObjects():

@@ -4,15 +4,13 @@ import QtQuick.Controls 2.2
 import QtQuick.Controls.Universal 2.2
 import QtGraphicalEffects 1.0
 import QtQuick.Dialogs 1.2
-//import CVStuff 1.0
-//import CVStuff2 1.0
 import QtQuick.Layouts 1.0
 
 Window {
     id: mainWindow
     visible: true
     width: 1050
-    height: 650
+    height: 500
     color: "#202020"
     title: qsTr("V-Switch Eye Tracker")
     Universal.theme: Universal.Dark
@@ -22,146 +20,11 @@ Window {
         console.log("closing window");
         calibControl.save_session();
         //calibHMD.save_session();
-        if (sceneGroup.video || leftEyeGroup.video || rightEyeGroup.video) {
+        if (leftEyeGroup.video || rightEyeGroup.video) {
             camManager.stop_cameras(true);
         } else {
             camManager.stop_cameras(false);
         }
-    }
-
-
-    /*
-    Scene Camera
-    ----------------
-    */
-    GroupBox {
-        id: sceneGroup
-        x: 30
-        y: 140
-        width: 660
-        height: 490
-        topPadding: 32
-        rightPadding: 12
-        leftPadding: 12
-        label: Text {
-            id: sceneTitle
-            color: "white"
-            text: "Scene Camera"
-            font.weight: Font.Light
-        }
-        property bool video: false
-
-        ComboBox {
-            id: sceneBox
-            currentIndex: 0
-            z: 1
-            x: 493
-            y: -12
-            height: 28
-            model: camManager.camera_list
-            onActivated:  {
-                model = camManager.camera_list;
-                if (textAt(index) === "File...") {
-                    sceneFileDialog.visible = true;
-                }
-                else if (textAt(index) === "No feed") {
-                    sceneGroup.video?
-                                camManager.stop_scene_cam(true) :
-                                camManager.stop_scene_cam(false);
-                    sceneImage.source = "../imgs/novideo.png";
-                }
-                else {
-                    sceneGroup.video = false;
-                    camManager.set_camera_source(sceneTitle.text, textAt(index));
-                    activate_config(sceneDisabledOverlay, prefSceneImg);
-                    enable_calibration();
-                }
-            }
-        }
-
-        FileDialog {
-            id: sceneFileDialog
-            title: "Please, select a scene video file"
-            folder: shortcuts.home
-            visible: false
-            nameFilters: ["Video files (*.avi, *.mkv, *.mpeg, *.mp4)", "All files (*)"]
-            onAccepted: {
-                var file = sceneFileDialog.fileUrl.toString();
-                var suffix = file.substring(file.indexOf("/")+2);
-                camManager.load_video(sceneTitle.text, suffix);
-                sceneGroup.video = true;
-                playImg.enabled = true;
-            }
-            onRejected: {
-                sceneBox.currentIndex = 0;
-            }
-        }
-
-        Image {
-            id: sceneImage
-            property bool counter: false
-            height: 433
-            anchors.rightMargin: -10
-            anchors.leftMargin: -10
-            anchors.bottomMargin: -10
-            anchors.topMargin: -10
-            anchors.fill: parent
-            source: "../imgs/novideo.png"
-            fillMode: Image.Stretch
-            cache: false
-
-            signal updateImage()
-            Component.onCompleted: sceneCam.update_image.connect(updateImage);
-
-            Connections {
-                target: sceneImage
-                onUpdateImage: {
-                    sceneImage.counter = !sceneImage.counter; //hack to force update
-                    sceneImage.source = "image://sceneimg/scene" + sceneImage.counter;
-                    var gazePoints = calibControl.predict;
-                    //@disable-check M126
-                    if (gazePoints[0] != -1.0 || gazePoints[2] != -1.0) {
-                        //console.log('GP: ' + gazePoints[0] +' '+ gazePoints[1] + ' '+ gazePoints[2] + ' ' + gazePoints[3]);
-                        leyePrediction.x = gazePoints[0] * sceneImage.width - leyePrediction.width/2;
-                        leyePrediction.y = gazePoints[1] * sceneImage.height - leyePrediction.width/2;
-                        reyePrediction.x = gazePoints[2] * sceneImage.width - reyePrediction.width/2;
-                        reyePrediction.y = gazePoints[3] * sceneImage.height - reyePrediction.width/2;
-                    }
-                }
-            }
-            Rectangle {
-                id: leyePrediction
-                x: 10
-                y: 10
-                z: 3
-                width: sceneImage.width/25
-                height: width
-                color: "purple"
-                radius: width*0.5
-                Text {
-                    anchors.centerIn: parent
-                    color: "white"
-                    text: "L"
-                }
-            }
-
-            Rectangle {
-                id: reyePrediction
-                x: 50
-                y: 10
-                z: 3
-                width: sceneImage.width/25
-                height: width
-                color: "green"
-                radius: width*0.5
-                Text {
-                    anchors.centerIn: parent
-                    color: "white"
-                    text: "R"
-                }
-            }
-        }
-
     }
 
     /*
@@ -170,14 +33,17 @@ Window {
     */
     GroupBox {
         id: leftEyeGroup
-        x: 710
-        y: 140
-        width: 315
-        height: 238
+        x: 30
+        y: 151
+        width: 480
+        height: 320
         label: Text {
             id: leftEyeTitle
-            color: "white"
+            x: 7
+            y: 5
+            color: "#ffffff"
             text: "Left Eye Camera"
+            z: 1
             font.weight: Font.Light
         }
         property bool video: false
@@ -210,7 +76,7 @@ Window {
             id: leftEyeBox
             currentIndex: 0
             z: 1
-            x: 141
+            x: 308
             y: -12
             height: 28
             model: camManager.camera_list
@@ -283,15 +149,18 @@ Window {
     */
     GroupBox {
         id: rightEyeGroup
-        x: 710
-        y: 391
-        width: 315
-        height: 238
+        x: 536
+        y: 151
+        width: 480
+        height: 320
         visible: true
         label: Text {
             id:rightEyeTitle
-            color: "white"
+            x: 7
+            y: 5
+            color: "#ffffff"
             text: "Right Eye Camera"
+            z: 1
             font.weight: Font.Light
         }
         property bool video: false
@@ -324,7 +193,7 @@ Window {
             id: rightEyeBox
             currentIndex: 0
             z: 1
-            x: 141
+            x: 315
             y: -12
             height: 28
             model: camManager.camera_list
@@ -368,8 +237,8 @@ Window {
         Image {
             id: reyeImage
             property bool counter: false
-            anchors.rightMargin: -10
-            anchors.leftMargin: -10
+            anchors.rightMargin: -11
+            anchors.leftMargin: -9
             anchors.bottomMargin: -10
             anchors.topMargin: -10
             source: "../imgs/novideo.png"
@@ -378,6 +247,7 @@ Window {
             cache: false
 
             signal updateImage()
+            x: -10
             Component.onCompleted: rightEyeCam.update_image.connect(updateImage);
 
             Connections {
@@ -418,17 +288,9 @@ Window {
     }
 
     function enable_calibration() {
-        if (calibrationModeBox.currentText == "Screen") {
-            if (prefSceneImg.enabled && (prefLeftEyeImg.enabled || prefRightEyeImg.enabled)) {
-                calibration.enabled = true;
-                calibrationDisabledOverlay.opacity = 0;
-            }
-        }
-        else if (calibrationModeBox.currentText == "HMD") {
-            if (prefLeftEyeImg.enabled && prefRightEyeImg.enabled) {
-                calibration.enabled = true;
-                calibrationDisabledOverlay.opacity = 0;
-            }
+        if (prefLeftEyeImg.enabled && prefRightEyeImg.enabled) {
+            calibration.enabled = true;
+            calibrationDisabledOverlay.opacity = 0;
         }
     }
 
@@ -443,8 +305,8 @@ Window {
 
     GroupBox {
         id: playbackSettings
-        x: 500
-        y: 16
+        x: 400
+        y: 25
         width: 110
         height: 110
         label: Text {
@@ -453,7 +315,8 @@ Window {
         }
 
         ColumnLayout {
-            y:0
+            x: 18
+            y:10
             Layout.fillHeight: false
             Layout.fillWidth: false
             Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
@@ -543,100 +406,19 @@ Window {
 
     GroupBox {
         id: cameraSettings
-        x: 710
-        y: 16
-        width: 315
+        x: 536
+        y: 25
+        width: 223
         height: 110
         visible: true
         label: Text {
             color:"gray"
             text:"Camera Settings"
         }
-        ColumnLayout {
-            y: 0
-            width: 65
-            height: 60
-            Layout.fillHeight: false
-            Layout.fillWidth: false
-            Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
-
-            Text {
-                id: prefSceneLabel
-                text: qsTr("Scene")
-                color: "white"
-                horizontalAlignment: Text.AlignHCenter
-            }
-            Image {
-                id: prefSceneImg
-                sourceSize.height: 45
-                sourceSize.width: 45
-                fillMode: Image.PreserveAspectFit
-                Layout.preferredHeight: 50
-                Layout.preferredWidth: 50
-                source: "../imgs/scene.png"
-                enabled: false
-                z:1
-
-                ColorOverlay {
-                    id: sceneDisabledOverlay
-                    anchors.fill: prefSceneImg
-                    source: prefSceneImg
-                    color: "#555555"
-                    opacity: 1
-                }
-
-                ColorOverlay {
-                    id: sceneOverlayImg
-                    anchors.fill: prefSceneImg
-                    source: prefSceneImg
-                    color: "white"
-                    opacity: 0
-                }
-
-                MouseArea {
-                    id: prefSceneBtn
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    anchors.fill: parent
-                    onEntered: {
-                        sceneOverlayImg.opacity = 1
-                    }
-                    onExited: {
-                        sceneOverlayImg.opacity = 0
-                    }
-                    onClicked: {
-                        update_comboboxes(scenePrefDropdown, sceneCam);
-                        activate_dropdown(scenePrefDropdown, leftEyePrefDropdown, rightEyePrefDropdown);
-                    }
-                }
-                Dropdown {
-                    id:scenePrefDropdown
-                    x: -143
-                    y: 49
-                    enabled: false;
-                    opacity: 0;
-                    comboFrameRate.onActivated: {
-                        sceneCam.set_mode(comboFrameRate.currentText, comboResolution.currentText);
-                        update_comboboxes(scenePrefDropdown, sceneCam);
-                    }
-                    comboResolution.onActivated: {
-                        sceneCam.set_mode(comboFrameRate.currentText, comboResolution.currentText);
-                        update_comboboxes(scenePrefDropdown, sceneCam);
-                    }
-                    dialGamma.onMoved: {
-                        sceneCam.set_gamma(dialGamma.value);
-                    }
-                    switchColor.onToggled: {
-                        sceneCam.set_color(switchColor.position);
-                    }
-                }
-            }
-
-        }
 
         ColumnLayout{
-            x: 104
-            y: 0
+            x: 13
+            y: 10
             width: 65
             height: 60
             Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
@@ -716,8 +498,8 @@ Window {
 
 
         ColumnLayout {
-            x: 210
-            y: 0
+            x: 127
+            y: 10
             width: 65
             height: 60
             Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
@@ -799,15 +581,16 @@ Window {
     GroupBox {
         id: calibrationSettings
         x: 30
-        y: 16
-        width: 460
+        y: 25
+        width: 336
         height: 110
         label: Text {
             color:"gray"
             text:"Calibration Settings"
         }
         ColumnLayout {
-            y:0
+            x: 12
+            y:10
             Layout.fillHeight: false
             Layout.fillWidth: false
             Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
@@ -857,16 +640,9 @@ Window {
                         calibrationOverlay.opacity = 0
                     }
                     onClicked: {
-                        //calibScreen.showFullScreen();
-                        if (calibrationModeBox.currentText == "Screen") {
-                            console.log("initializing on-screen calibration");
-                            calibScreen.showNormal();
-                        }
-                        else if (calibrationModeBox.currentText == "HMD") {
-                            dropdownHMD.enabled = true;
-                            dropdownHMD.opacity = 1;
-                            calibHMDitem.focus = true;
-                        }
+                        dropdownHMD.enabled = true;
+                        dropdownHMD.opacity = 1;
+                        calibHMDitem.focus = true;
                     }
                 }
                 DropdownHMD {
@@ -878,122 +654,9 @@ Window {
                 }
             }
         }
-
         ColumnLayout {
-            x: 67
-            y: 0
-            Text {
-                id: estimationLabel
-                color: "#ffffff"
-                text: qsTr("Estimation")
-                wrapMode: Text.WordWrap
-                horizontalAlignment: Text.AlignHCenter
-            }
-
-            Image {
-                id: estimation
-                fillMode: Image.PreserveAspectFit
-                Layout.preferredWidth: 50
-                sourceSize.width: 50
-                z: 1
-                source: "../imgs/estimation.png"
-                Layout.preferredHeight: 50
-                sourceSize.height: 50
-                enabled: false// <-- turned on for DEBUG!
-
-                signal enableEstimation();
-
-                Component.onCompleted: {
-                    calibControl.enable_estimation.connect(enableEstimation);
-                }
-
-                onEnableEstimation: {
-                    estimation.enabled = true;
-                }
-
-                ColorOverlay {
-                    id: estimationDisabledOverlay
-                    color: "#555555"
-                    opacity: 1
-                    source: estimation
-                    anchors.fill: estimation
-                }
-
-                ColorOverlay {
-                    id: estimationOverlay
-                    color: "#ffffff"
-                    opacity: 0
-                    source: estimation
-                    anchors.fill: estimation
-                }
-
-                MouseArea {
-                    id: estimationBtn
-                    cursorShape: Qt.PointingHandCursor
-                    hoverEnabled: true
-                    anchors.fill: parent
-                    onEntered: {
-                        estimationOverlay.opacity = 1
-                    }
-                    onExited: {
-                        estimationOverlay.opacity = 0
-                    }
-                    onClicked: {
-                        if (!dropdownEstimation.enabled) {
-                            dropdownEstimation.enabled = true;
-                            dropdownEstimation.opacity = 1;
-                            calibControl.show_estimation();
-                        } else {
-                            dropdownEstimation.enabled = false;
-                            dropdownEstimation.opacity = 0;
-                        }
-                    }
-                }
-                DropdownEstimation {
-                    id: dropdownEstimation
-                    x: 34
-                    y: 50
-                    z: 2
-                    enabled: false
-                    opacity: 0;
-                }
-            }
-            Layout.fillWidth: false
-            Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
-            Layout.fillHeight: false
-        }
-
-        ColumnLayout {
-            x: 145
-            y:0
-            width: 140
-            height: 60
-            Layout.fillHeight: false
-            Layout.fillWidth: false
-            Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
-
-            Text {
-                id: calibrationModeLabel
-                text: qsTr("Mode")
-                color: "white"
-                horizontalAlignment: Text.AlignHCenter
-            }
-            ComboBox {
-                id: calibrationModeBox
-                width: 140
-                height: 28
-                currentIndex: 0
-                z: 1
-                font.pointSize: 10
-                model: ["Screen", "HMD"]
-                onActivated:  {
-                    console.log("selected:", index);
-                }
-            }
-        }
-        ColumnLayout {
-            x: 290
-            y:0
+            x: 121
+            y:10
             width: 60
             Layout.fillHeight: false
             Layout.fillWidth: false
@@ -1012,7 +675,7 @@ Window {
                 checked: false
                 font.pointSize: 8
                 onCheckedChanged: {
-                    calibControl.toggle_storage();
+                    calibHMD.toggle_storage();
                 }
             }
         }
@@ -1020,8 +683,8 @@ Window {
         //3D MANAGEMENT
         //------------
         ColumnLayout {
-            x: 370
-            y:0
+            x: 226
+            y:10
             width: 60
             Layout.fillHeight: false
             Layout.fillWidth: false
@@ -1041,7 +704,6 @@ Window {
                 font.pointSize: 8
                 onCheckedChanged: {
                     camManager.toggle_3D();
-                    calibControl.toggle_3D();
                     calibHMD.toggle_3D();
                     if (switch3DModel.checked) {
                         leftIcon3d.opacity  = 1;
@@ -1056,14 +718,6 @@ Window {
 
     }
 
-    /*CALIB SCREEN
-      ------------*/
-    CalibScreen {
-        id: calibScreen
-        visible: false
-        height: 720
-        width: 1280
-    }
 
     /*CALIB HMD
       ----------*/
