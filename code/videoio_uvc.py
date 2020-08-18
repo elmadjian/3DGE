@@ -94,8 +94,9 @@ class VideoIO_UVC(QObject):
         '''
         cam1.stop()
         prev_source = cam1.get_source()
-        cam2.stop()
-        cam2.set_source(prev_source)
+        if source == cam2.get_source():
+            cam2.stop()
+            cam2.set_source(prev_source)
         cam1.set_source(source)
 
 

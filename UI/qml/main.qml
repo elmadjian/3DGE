@@ -100,7 +100,7 @@ Window {
 
         FileDialog {
             id: leftEyeFileDialog
-            title: "Please, select a scene video file"
+            title: "Please, select a video file"
             folder: shortcuts.home
             visible: false
             nameFilters: ["Video files (*.avi, *.mkv, *.mpeg, *.mp4)", "All files (*)"]
@@ -217,7 +217,7 @@ Window {
 
         FileDialog {
             id: rightEyeFileDialog
-            title: "Please, select a scene video file"
+            title: "Please, select a video file"
             folder: shortcuts.home
             visible: false
             nameFilters: ["Video files (*.avi, *.mkv, *.mpeg, *.mp4)", "All files (*)"]
@@ -271,13 +271,11 @@ Window {
         uid.comboResolution.currentIndex = camType.current_res_index;
     }
 
-    function activate_dropdown(uid_active, uid2, uid3) {
+    function activate_dropdown(uid_active, uid2) {
         uid_active.enabled = !uid_active.enabled;
         uid_active.opacity = !uid_active.opacity;
         uid2.enabled = false;
         uid2.opacity = 0;
-        uid3.enabled = false;
-        uid3.opacity = 0;
     }
 
     function activate_config(overlay, prefImg) {
@@ -390,11 +388,11 @@ Window {
                     }
                     onClicked: {
                         if (playImg.state == "stalled" || playImg.state == "paused") {
-                            camManager.play_cams(sceneGroup.video, leftEyeGroup.video, rightEyeGroup.video);
+                            camManager.play_cams(leftEyeGroup.video, rightEyeGroup.video);
                             playImg.state = "playing";
                         }
                         else if (playImg.state == "playing") {
-                            camManager.pause_cams(sceneGroup.video, leftEyeGroup.video, rightEyeGroup.video);
+                            camManager.pause_cams(leftEyeGroup.video, rightEyeGroup.video);
                             playImg.state = "paused";
                         }
                     }
@@ -468,7 +466,7 @@ Window {
                     }
                     onClicked: {
                         update_comboboxes(leftEyePrefDropdown, leftEyeCam);
-                        activate_dropdown(leftEyePrefDropdown, scenePrefDropdown, rightEyePrefDropdown);
+                        activate_dropdown(leftEyePrefDropdown, rightEyePrefDropdown);
                     }
                 }
                 Dropdown {
@@ -549,7 +547,7 @@ Window {
                     }
                     onClicked: {
                         update_comboboxes(rightEyePrefDropdown, rightEyeCam);
-                        activate_dropdown(rightEyePrefDropdown, scenePrefDropdown, leftEyePrefDropdown);
+                        activate_dropdown(rightEyePrefDropdown, leftEyePrefDropdown);
                     }
                 }
                 Dropdown {
