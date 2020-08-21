@@ -39,10 +39,10 @@ if sys.argv[1] == "--uvc":
 if sys.argv[1] == "--rec":
     dev_list = uvc.device_list()
     print(dev_list)
-    cap = uvc.Capture(dev_list[3]['uid'])
-    cap.frame_mode = (400,400,60)
+    cap = uvc.Capture(dev_list[2]['uid'])
+    cap.frame_mode = (640,480,30)
     cap.bandwidth_factor = 1.3
-    out = cv2.VideoWriter('test.avi', cv2.VideoWriter_fourcc('M','J','P','G'), 120, (400,400))
+    out = cv2.VideoWriter('glasses2.avi', cv2.VideoWriter_fourcc('M','J','P','G'), 30, (640,480))
     while True:
         frame = cap.get_frame()
         out.write(frame.bgr)
@@ -104,8 +104,10 @@ if sys.argv[1] == "--eye":
 
 
 if sys.argv[1] == '--3D':
-    #cap = cv2.VideoCapture('pupil.mp4')
-    cap = cv2.VideoCapture('pupil2.mkv')
+    cap = cv2.VideoCapture('pupil.mp4')
+    #cap = cv2.VideoCapture('pupil2.mkv')
+    #cap = cv2.VideoCapture('glasses.avi')
+    #cap = cv2.VideoCapture('glasses2.avi')
     #cap = cv2.VideoCapture('demo.mp4')
     #cap = cv2.VideoCapture('test.avi')
     #eyeobj = eip.EyeImageProcessor(0,(400,400),0,0,0,0)

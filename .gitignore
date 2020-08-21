@@ -1,5 +1,7 @@
 __pycache__/
 .vscode/
+code/*.md
 *.mkv
 *.avi
 *.mp4
+.pylintrc

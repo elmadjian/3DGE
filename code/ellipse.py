@@ -3,6 +3,8 @@ import numpy as np
 '''
 Python code based on the one provided by Yiu Yuk Hoi, Seyed-Ahmad Ahmadi, and Moustafa Aboulatta
 (https://github.com/pydsgz/DeepVOG)
+
+OpenCV implementation works fine, but random angle axis inversion makes it a headache for ellipse unprojection
 '''
 
 class Ellipse():

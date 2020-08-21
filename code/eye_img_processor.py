@@ -16,7 +16,15 @@ class EyeImageProcessor(imp.ImageProcessor):
         self.tracking = False
         self.lost_tracking = 0
         self.buffer = []
-        self.rad_buffer = []
+        
+        self.intensity_range = 23
+        self.bbox_size = {'min': None, 'max': None}
+        self.pupil_size = {'min': None, 'max': None}
+
+        #ROI grid config
+        self.grid_v = 9
+        self.grid_weight = np.ones((self.grid_v, self.grid_v))
+        self.grid_id = -1
         
         #3D
         sensor_size = (3.6, 4.8)
@@ -40,8 +48,10 @@ class EyeImageProcessor(imp.ImageProcessor):
                     c, axes, rad = pupil
                     c = (c[0]+x+3, c[1]+y+3)
                     size = max(axes)*2
-                    if self.__is_consistent(axes, width, 0.050):
-                        self.bbox = self.__get_bbox(c, size, img)
+                    bbox = self.__get_bbox(c, size, img)
+                    if self.__is_consistent(axes, width, 0.050) and bbox is not None:
+                        self.bbox = bbox
+                        self.grid_weight[self.grid_id] = 1
                         self.__draw_tracking_info(c, img, self.bbox)
                         if mode_3D:
                             self.fitter.unproject_ellipse([c,axes,rad],img)
@@ -49,13 +59,11 @@ class EyeImageProcessor(imp.ImageProcessor):
                             ppos = self.fitter.curr_state['gaze_pos'].flatten()
                             return img, np.hstack((ppos,time.monotonic()))
                         return img, np.array([c[0]/width, c[1]/height, time.monotonic(),0])
+                    else:
+                        self.__perform_penalty(pupil=True)
                 else:
-                    self.buffer = []
-                    self.lost_tracking += 1
-                    if self.lost_tracking > 20:
-                        self.tracking = False
-                        self.lost_tracking = 0
-            except Exception as e:
+                    self.__perform_penalty()
+            except Exception:
                 traceback.print_exc()
         return img, None
 
@@ -63,7 +71,49 @@ class EyeImageProcessor(imp.ImageProcessor):
     def reset_center_axis(self):
         self.fitter.reset_axis()
         print('>>> resetting center axis')
-        
+
+
+    def __find_ROI(self, frame):
+        '''
+        Sliding window that finds an initial good seed for the pupil based
+        on image integrals (pupil is usually dark)
+
+        When pupil tracking is failing from the quadrant seed 
+        '''
+        h = int(frame.shape[0]/3)
+        w = int(frame.shape[1]/3)
+        hfs = int(h/4)
+        wfs = int(w/4)
+        self.bbox_size['min'], self.bbox_size['max'] = w //2, w
+        self.pupil_size['min'], self.pupil_size['max'] = w//5, w//1.5
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        minval = sys.maxsize
+        bbox = None
+        for y in range(self.grid_v):
+            for x in range(self.grid_v):
+                crop = gray[y*hfs:y*hfs+h, x*wfs:x*wfs+w]
+                integral = cv2.integral(crop)
+                val = integral[-1,-1] * self.grid_weight[y,x]
+                if val < minval:
+                    minval = val
+                    bbox = (x*wfs, y*hfs, w, h)
+                    self.grid_id = (y,x)
+                #cv2.rectangle(frame, bbox, (255,120,120), 2, 1)
+                #cv2.imshow('gente...', frame)
+                #cv2.waitKey(0)
+        cv2.rectangle(frame, bbox, (255,120,120), 2, 1)
+        print('curr_id:', self.grid_id, 'curr_weight:', self.grid_weight[self.grid_id])
+        return bbox
+
+
+    def __perform_penalty(self, pupil=False):
+        if not pupil:
+            self.buffer = []
+        self.lost_tracking += 1
+        if self.lost_tracking > 15:
+            self.grid_weight[self.grid_id] += 2
+            self.tracking = False
+            self.lost_tracking = 0
 
 
     def __is_consistent(self, axes, width, thresh):
@@ -72,15 +122,22 @@ class EyeImageProcessor(imp.ImageProcessor):
         potential false positives. Ideally we want only reliable pupil
         candidates.
         '''
+        if np.max(axes) > self.pupil_size['max']:
+            print('pupil size too big')
+            return False
+        if np.max(axes) < self.pupil_size['min']:
+            print('pupil size too small')
+            return False
         axes_np = np.sort(np.array(axes)/width)
-        if len(self.buffer) < 5:
+        if len(self.buffer) < 4:
             self.buffer.append(axes_np)
         else:
             dist = 0
             for ax in self.buffer:
                 dist += np.linalg.norm(ax - axes_np)
-            if dist > thresh:
-                return False
+            # if dist > thresh:
+            #     print('pupil very different from history')
+            #     return False
             self.buffer.pop(0)
             self.buffer.append(axes_np)
         return True
@@ -103,6 +160,8 @@ class EyeImageProcessor(imp.ImageProcessor):
         y2 = self.__test_boundaries(y2, img.shape[0])
         w = x2-x1
         h = y2-y1
+        if w < self.bbox_size['min'] or w > self.bbox_size['max']:
+            return 
         return int(x1),int(y1),int(w),int(h)
 
     def __test_boundaries(self, x, lim):
@@ -120,11 +179,10 @@ class EyeImageProcessor(imp.ImageProcessor):
         return edges
 
 
-
-
     def __fit_ellipse(self, crop, cnt):
         empty_box = np.zeros(crop.shape)
         cv2.drawContours(empty_box, cnt, -1, 255, 2)
+        cv2.imshow('fitellipse', empty_box)
         points = np.where(empty_box == 255)
         vertices = np.array([points[0], points[1]]).T
         ellipse = ell.Ellipse([vertices[:,1], vertices[:,0]])
@@ -138,19 +196,18 @@ class EyeImageProcessor(imp.ImageProcessor):
         if len(cropgray.shape) > 2:
             cropgray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
         filtered = cv2.bilateralFilter(cropgray, 7, 20, 20)
-        adjusted = self.__adjust_histogram(filtered)
+        edges = self.__find_edges(filtered, 40)
+        cv2.imshow('canny', edges)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
-        upper, thresh = cv2.threshold(adjusted,0,255,cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-        lower = 0.5*upper
-        edges  = cv2.Canny(adjusted, lower, upper)
-        edges  = self.__remove_glint(filtered, edges)
+        edges  = cv2.dilate(edges, kernel)
         edges  = self.__filter_edges(edges)
-        dilate = cv2.dilate(edges, kernel, iterations=2)
-        cnt,_ = cv2.findContours(dilate, cv2.RETR_EXTERNAL,cv2.CHAIN_APPROX_NONE)
+        cv2.imshow('filtered', edges)
+        cnt,_ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+        #cnts = self.__test_curvature(cnt)
         cnts  = [(cv2.contourArea(c), c) for c in cnt]
         if cnts:
             biggest = max(cnts, key=lambda x: x[0])[1]
-            print('biggest:', biggest)
+            #print('biggest:', biggest)
             hull = cv2.convexHull(biggest)
             if len(hull) >= 5:
                 ellipse = self.__fit_ellipse(cropgray, hull)
@@ -160,28 +217,57 @@ class EyeImageProcessor(imp.ImageProcessor):
                     return ellipse
 
 
-    def __find_ROI(self, frame):
-        h = int(frame.shape[0]/3)
-        w = int(frame.shape[1]/3)
-        hfs = int(h/6)
-        wfs = int(w/6)
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        minval = sys.maxsize
-        bbox = None
-        for y in range(13):
-            for x in range(13):
-                crop = gray[y*hfs:y*hfs+h, x*wfs:x*wfs+w]
-                integral = cv2.integral(crop)
-                copy = frame.copy()
-                if integral[-1,-1] < minval:
-                    minval = integral[-1,-1]
-                    bbox = (x*wfs, y*hfs, w, h)
-        cv2.rectangle(frame, bbox, (255,120,120), 2, 1)
-        return bbox
+    def __test_curvature(self, contours, cutoff_min=90, cutoff_max=165):
+        '''
+        cutoff_min: min curvature in degrees between 3 points
+        cutoff_max: max curvature in degrees between 3 points
+        '''
+        new_contours = []
+        for c in contours:
+            c = c[:len(c)//2]
+            if len(c) <= 5:
+                continue 
+            approx_curve = cv2.approxPolyDP(c, 1.5, False)
+            for i in range(1, len(approx_curve)-1):
+                A = approx_curve[i-1]
+                B = approx_curve[i]
+                C = approx_curve[i+1]
+                BA = A[0]-B[0]
+                BC = C[0]-B[0]
+                cos_angle = np.dot(BA,BC)/(np.linalg.norm(BA)*np.linalg.norm(BC))
+                angle = np.degrees(np.arccos(cos_angle))
+                print('angle:', angle)
+                if angle > cutoff_min and angle < cutoff_max:
+                    new_contours.append(A)
+                    new_contours.append(B)
+                    new_contours.append(C)
+            print('_____')
+        print('-------------')
+        new_contours = np.array(new_contours).reshape((-1,1,2)).astype(np.int32)
+        #print(new_contours)
+        return new_contours
 
-    
+    # def __test_distance(self, contours, img):
+    #     c = self.__blob_center(img)
+    #     cv2.circle(img, c, 7, (255,0,255), img, -1)
+    #     cnt_centers = set()
+    #     for cnt in contours:
+    #         p = len(cnt)//2
+    #         cnt_centers.append(cnt[p][0])
+    #     for cnt in cnt_centers:
+    #         dist_c = np.linalg.norm(cnt-c)
+    #         for p in cnt_centers:
+    #             if cnt == p:
+    #                 continue
+                
+
+
     def __filter_edges(self, edges):
-        cutoff = (edges.shape[0] + edges.shape[1])/8
+        '''
+        cuttof:
+        ratio:
+        '''
+        cutoff = (edges.shape[0] + edges.shape[1])/20
         _,labels, stats,_ = cv2.connectedComponentsWithStats(edges)
         filtered = np.zeros(edges.shape, np.uint8)
         stats = stats[1:]
@@ -189,10 +275,21 @@ class EyeImageProcessor(imp.ImageProcessor):
         if len(stats) > 0:
             for i in range(len(stats)):
                 ratio = stats[i,2]/stats[i,3]
-                if (0.33 < ratio < 3) and stats[i,4] > cutoff:
+                if (0.25 < ratio < 2) and stats[i,4] > cutoff:
                     idx = i+1
                     filtered[labels==idx] = 255
         return filtered
+
+
+    def __blob_center(self, img):
+        _, thresh = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+        cv2.imshow('testando', thresh)
+        _, labels, stats, _ = cv2.connectedComponentsWithStats(thresh)
+        x = stats[1,0]
+        y = stats[1,1]
+        w = stats[1,2]
+        h = stats[1,3]
+        return (x+w//2, y+h//2)
 
 
     def __adjust_histogram(self, img):
@@ -211,12 +308,44 @@ class EyeImageProcessor(imp.ImageProcessor):
                 break
         lower, upper = img.copy(), img.copy()
         lower, upper = lower.astype('float32'), upper.astype('float32')
-        lower[lower > cutoff] = 25
-        upper[upper <= cutoff] = -25
-        lower -= 25
-        upper += 25
+        lower[lower > cutoff] = 30
+        upper[upper <= cutoff] = -30
+        lower -= 30
+        upper += 30
         lower = np.clip(lower, 0, 255)
         upper = np.clip(upper, 0, 255)
         lower, upper = lower.astype('uint8'), upper.astype('uint8')
         merged = cv2.add(lower, upper)
         return merged
+
+
+    def __find_edges(self, img, intensity_values):
+        '''
+        Adapted edge detector from Pupil Labs
+        '''
+        hist = np.bincount(img.ravel(), minlength=256)
+        lowest_spike_index = 255
+        highest_spike_index = 0
+        max_intensity = 0
+        found_section = False
+        for i in range(len(hist)):
+            intensity = hist[i]
+            if intensity > intensity_values:
+                max_intensity = np.maximum(intensity, max_intensity)
+                lowest_spike_index = np.minimum(lowest_spike_index, i)
+                highest_spike_index = np.maximum(highest_spike_index, i)
+                found_section = True
+        if not found_section:
+            lowest_spike_index = 200
+            highest_spike_index = 255
+        bin_img = cv2.inRange(img, np.array(0), np.array(lowest_spike_index + self.intensity_range))
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7,7))
+        bin_img = cv2.dilate(bin_img, kernel, iterations=2)
+        spec_mask = cv2.inRange(img, np.array(0), np.array(highest_spike_index-5))
+        spec_mask = cv2.erode(spec_mask, kernel)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9,9))
+        img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)
+        edges = cv2.Canny(img, 160, 160*2, apertureSize=5)
+        edges = cv2.min(edges, spec_mask)
+        edges = cv2.min(edges, bin_img)
+        return edges
