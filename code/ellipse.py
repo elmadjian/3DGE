@@ -16,6 +16,7 @@ class Ellipse():
         data should be a list of the form [[x1,...,xn],[y1,...,yn]]
         '''
         a1, a2 = self.__fit(data)
+        self.data = data
         self.coef = np.vstack([a1, a2])
         c, w, h, phi = self.__create_parameters()
         self.center = c
@@ -38,8 +39,8 @@ class Ellipse():
         a2 = -S3.I * S2.T * a1
         return a1, a2
 
-    def get_residual(self, data):
-        x,y = np.asarray(data, dtype=float)
+    def get_residual(self):
+        x,y = np.asarray(self.data, dtype=float)
         D = np.mat(np.vstack([x**2, x*y, y**2, x, y, np.ones(len(x))])).T
         a = self.coef[0,0]
         b = self.coef[1,0]/2.
@@ -50,6 +51,7 @@ class Ellipse():
         coef = np.mat([a,b,c,d,f,g]).T
         R = D*coef
         return R
+
 
     def __create_parameters(self):
         a = self.coef[0,0]

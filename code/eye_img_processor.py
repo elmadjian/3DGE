@@ -18,7 +18,7 @@ class EyeImageProcessor(imp.ImageProcessor):
         self.bbox = None
         self.tracking = False
         self.lost_tracking = 0
-        self.buffer = []
+        self.buffer = {'a':[], 'b':[]}
         
         self.intensity_range = 23
         self.bbox_size = {'min': None, 'max': None}
@@ -26,10 +26,8 @@ class EyeImageProcessor(imp.ImageProcessor):
 
         #ROI grid config
         self.grid_v = 9
-        self.grid_weight = np.ones((self.grid_v, self.grid_v))
-        self.grid_id = -1
-        self.quad = {}
         self.center = None
+        self.consistency = False
         
         #3D
         sensor_size = (3.6, 4.8)
@@ -37,22 +35,6 @@ class EyeImageProcessor(imp.ImageProcessor):
         res = (mode[1], mode[0])
         self.fitter = ef.EyeFitter(focal_length, res, sensor_size)
 
-
-    def initial_setup(self, width, height):
-        h = height//3
-        w = width//3
-        hfs = h//4
-        wfs = w//4
-        for y in range(3):
-            for x in range(5):
-                crop = gray[y*hfs:y*hfs+h, x*wfs:x*wfs+w]
-                integral = cv2.integral(crop)
-                val = integral[-1,-1] * self.grid_weight[y,x]
-                if val < minval:
-                    minval = val
-                    bbox = (x*wfs, y*hfs, w, h)
-                    self.grid_id = (y,x)
-        
 
     def process(self, img, mode_3D=False):
         if img is None:
@@ -66,54 +48,27 @@ class EyeImageProcessor(imp.ImageProcessor):
             try:
                 pupil = self.__find_contours(self.bbox, img)
                 if pupil is not None:
-                    c, axes, rad = pupil
+                    c, axes, rad = pupil.get_parameters()
                     c = (c[0]+x+3, c[1]+y+3)
                     size = max(axes)*2
                     bbox = self.__get_bbox(c, size, img)
-                    if self.__is_consistent(axes, width, 0.050) and bbox is not None:
+                    if self.__is_consistent(pupil, 5) and bbox is not None:
+                        self.consistency = True
                         self.bbox = bbox
-                        self.grid_weight[self.grid_id] = 1
-                        self.__draw_tracking_info(c, img, self.bbox)
-                        if mode_3D:
+                        self.__draw_tracking_info([c,axes,rad], img, self.bbox)
+                        if mode_3D and len(self.buffer['a']) >= 3:
                             self.fitter.unproject_ellipse([c,axes,rad],img)
                             self.fitter.draw_vectors([c,axes,rad], img)
                             ppos = self.fitter.curr_state['gaze_pos'].flatten()
                             return img, np.hstack((ppos,time.monotonic()))
                         return img, np.array([c[0]/width, c[1]/height, time.monotonic(),0])
-                    else:
-                        self.__perform_penalty(pupil=True)
+                    # else:
+                    #     self.__perform_penalty(pupil=True)
                 else:
                     self.__perform_penalty()
             except Exception:
                 traceback.print_exc()
         return img, None
-
-    
-    # def __find_pupil(self, bbox, img):
-    #     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    #     #x,y,w,h = bbox
-    #     #crop = gray[y+3:y+h-3, x+3:x+w-3].copy(order='C')
-    #     #filtered = cv2.bilateralFilter(gray, 7, 20, 20)
-    #     #adjusted = self.__adjust_histogram(gray)
-    #     #result = self.detector3D.detect(gray, time.monotonic())
-    #     result = self.detector.detect(gray)
-    #     #print('KEYS:', result.keys())
-    #     ellipse = result['ellipse']
-    #     c = ellipse['center']
-    #     a = ellipse['axes']
-    #     rad = ellipse['angle']
-    #     #painted = cv2.cvtColor(crop, cv2.COLOR_GRAY2BGR)
-    #     cv2.ellipse(
-    #         img,
-    #         (int(c[0]), int(c[1])),
-    #         (int(a[0]/2), int(a[1]/2)),
-    #         rad,
-    #         0, 360, # start/end angle for drawing
-    #         (0, 255, 0) # color (BGR): red
-    #     )
-    #     #img[y+3:y+h-3, x+3:x+w-3] = painted
-    #     cv2.imshow('pupil', img)
-
 
 
     def reset_center_axis(self):
@@ -127,9 +82,9 @@ class EyeImageProcessor(imp.ImageProcessor):
         if distance < 0.6*self.center[1]:
             weight -= 0.1
         if distance < 0.4*self.center[1]:
-            weight -= 0.2
+            weight -= 0.25
         if distance < 0.25*self.center[1]:
-            weight -= 0.2
+            weight -= 0.25
         return weight
 
 
@@ -148,7 +103,7 @@ class EyeImageProcessor(imp.ImageProcessor):
         if self.center is None:
             self.center = np.array([frame.shape[0]//2, frame.shape[1]//2])
         self.bbox_size['min'], self.bbox_size['max'] = w //2, w
-        self.pupil_size['min'], self.pupil_size['max'] = w//5, w//1.5
+        self.pupil_size['min'], self.pupil_size['max'] = w//6, w//1.5
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         minval = sys.maxsize
         bbox = None
@@ -162,50 +117,56 @@ class EyeImageProcessor(imp.ImageProcessor):
                 if val < minval:
                     minval = val
                     bbox = (x*wfs, y*hfs, w, h)
-        cv2.rectangle(frame, bbox, (255,120,120), 2, 1)
+        #cv2.rectangle(frame, bbox, (255,120,120), 2, 1)
         return bbox
 
 
-    def __perform_penalty(self, pupil=False):
-        if not pupil:
-            self.buffer = []
+    def __perform_penalty(self):
         self.lost_tracking += 1
         if self.lost_tracking > 15:
+            print('tracking lost')
             self.tracking = False
             self.lost_tracking = 0
+            self.buffer = {'a':[], 'b':[]}
+            if not self.consistency:
+                self.center = None
+            self.consistency = False
 
 
-    def __is_consistent(self, axes, width, thresh):
+    def __is_consistent(self, ellipse, thresh):
         '''
         The higher the threshold the higher the number of
         potential false positives. Ideally we want only reliable pupil
         candidates.
         '''
-        if np.max(axes) > self.pupil_size['max']:
-            #print('pupil size too big')
+        center, axes, _ = ellipse.get_parameters()
+        if np.max(axes) > self.pupil_size['max'] or\
+        np.max(axes) < self.pupil_size['min']:
             return False
-        if np.max(axes) < self.pupil_size['min']:
-            #print('pupil size too small')
-            return False
-        axes_np = np.sort(np.array(axes)/width)
-        if len(self.buffer) < 4:
-            self.buffer.append(axes_np)
+        a, b = np.max(axes), np.min(axes)
+        if len(self.buffer['a']) < 3:
+            self.buffer['a'].append(a)
+            self.buffer['b'].append(b)
         else:
-            dist = 0
-            for ax in self.buffer:
-                dist += np.linalg.norm(ax - axes_np)
-            # if dist > thresh:
-            #     print('pupil very different from history')
-            #     return False
-            self.buffer.pop(0)
-            self.buffer.append(axes_np)
+            a_var = np.var(self.buffer['a'])
+            b_var = np.var(self.buffer['b'])
+            if a_var + b_var > thresh:
+                self.buffer = {'a':[], 'b':[]}
+                return False
+            self.buffer['a'].pop(0)
+            self.buffer['b'].pop(0)
+            self.buffer['a'].append(a)
+            self.buffer['b'].append(b)
+            self.center = center
         return True
 
 
-    def __draw_tracking_info(self, p, img, bbox, color=(255,120,120)):
-        cv2.drawMarker(img, (int(p[0]), int(p[1])), (0,255,0),\
-                    cv2.MARKER_CROSS, 12, 1)
+    def __draw_tracking_info(self, pupil, img, bbox, color=(255,120,120)):
+        (xc,yc), (w,h), radian = pupil
+        ellipse = ((xc,yc), (w*2, h*2), np.rad2deg(radian))
+        cv2.drawMarker(img, (int(xc), int(yc)), (0,255,0), cv2.MARKER_CROSS, 12, 1)
         cv2.rectangle(img, bbox, color, 2, 1)
+        cv2.ellipse(img, ellipse, (0,0,255), 2)
 
 
     def __get_bbox(self, point, size, img):
@@ -220,7 +181,6 @@ class EyeImageProcessor(imp.ImageProcessor):
         w = x2-x1
         h = y2-y1
         if w < self.bbox_size['min'] or w > self.bbox_size['max']:
-            print('not within bbox limits')
             return 
         return int(x1),int(y1),int(w),int(h)
 
@@ -231,22 +191,14 @@ class EyeImageProcessor(imp.ImageProcessor):
             return lim-1
         return x
 
-    def __remove_glint(self, img, edges):
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3,3))
-        thresh = cv2.threshold(img, 180, 255, cv2.THRESH_BINARY)[1]
-        dilate = cv2.dilate(thresh, kernel)
-        edges[dilate >= 255] = 0
-        return edges
-
 
     def __fit_ellipse(self, crop, cnt):
         empty_box = np.zeros(crop.shape)
         cv2.drawContours(empty_box, cnt, -1, 255, 2)
-        #cv2.imshow('fitellipse', empty_box)
         points = np.where(empty_box == 255)
         vertices = np.array([points[0], points[1]]).T
         ellipse = ell.Ellipse([vertices[:,1], vertices[:,0]])
-        return ellipse.get_parameters()
+        return ellipse
         
 
     def __find_contours(self, bbox, frame):
@@ -257,12 +209,8 @@ class EyeImageProcessor(imp.ImageProcessor):
             cropgray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
         filtered = cv2.bilateralFilter(cropgray, 7, 20, 20)
         edges = self.__find_edges(filtered, 75)
-        #cv2.imshow('edges', edges)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7,7))
-        # edges  = cv2.dilate(edges, kernel)
-        # edges  = cv2.erode(edges, kernel)
         edges  = self.__filter_edges(edges)
-        cv2.imshow('filtered', edges)
         cnt, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
         pts = self.__get_curve_points(cnt, edges)
         if len(pts) >= 5:
@@ -271,47 +219,28 @@ class EyeImageProcessor(imp.ImageProcessor):
                 ellipse = self.__fit_ellipse(cropgray, hull)
                 painted = cv2.cvtColor(cropgray, cv2.COLOR_GRAY2BGR)
                 frame[y+3:y+h-3, x+3:x+w-3] = painted
-                if ellipse is not None:
-                    return ellipse
-            #model, _ = si.measure.ransac(pts, si.measure.EllipseModel, 5, 3, max_trials=15)
-            # model = si.measure.EllipseModel()
-            # if model.estimate(pts):
-            #     xc, yc, a, b, theta = model.params
-            #     painted = cv2.cvtColor(cropgray, cv2.COLOR_GRAY2BGR)
-            #     ellipse = ((xc, yc), (a*2, b*2), np.rad2deg(theta))
-            #     cv2.ellipse(painted, ellipse, (0,0,255))
-            #     frame[y+3:y+h-3, x+3:x+w-3] = painted
-            #     return [xc,yc], [a,b], theta
-        #ellipse = si.measure.EllipseModel()
-
-        
-        # #cnts = self.__test_curvature(cnt)
-        # cnts  = [(cv2.contourArea(c), c) for c in cnt]
-        # if cnts:
-        #     biggest = max(cnts, key=lambda x: x[0])[1]
-        #     #print('biggest:', biggest)
-        #     hull = cv2.convexHull(biggest)
-        #     if len(hull) >= 5:
-        #         ellipse = self.__fit_ellipse(cropgray, hull)
-        #         painted = cv2.cvtColor(cropgray, cv2.COLOR_GRAY2BGR)
-        #         frame[y+3:y+h-3, x+3:x+w-3] = painted
-        #         if ellipse is not None:
-        #             return ellipse
+                return ellipse
 
 
-    def __get_curve_points(self, contours, img):
+    def __get_curve_points(self, contours, img, cutoff=72):
         '''
         '''
         new_contours = []
         #contours = sorted(contours, key=lambda x: len(x))
+        m = cv2.moments(img)
+        centroid = np.array([0,0])
+        if m['m00'] != 0:
+            centroid = np.array([m['m01']/m['m00'], m['m10']/m['m00']])
         for c in contours:
-            if len(c) <= 5:
-                continue 
             approx_curve = cv2.approxPolyDP(c, 1.5, False)
+            length = len(approx_curve)
+            p = approx_curve[length//2][0]
+            dist = np.linalg.norm(centroid-p)
+            if dist > cutoff:
+                continue
             for i in range(len(approx_curve)):
                 new_contours.append(approx_curve[i][0])
                 mytuple = (approx_curve[i][0][0], approx_curve[i][0][1])
-                #cv2.circle(img, mytuple, 3, 255, -1)
         new_contours = np.array(new_contours).reshape((-1,1,2)).astype(np.int32)
         return new_contours
 
@@ -320,30 +249,24 @@ class EyeImageProcessor(imp.ImageProcessor):
         '''
         min_area: connected component minimum area
         ratio: we want components with a certain curvature
+        returns a zeroed image if there are too many edges (i.e., eyelashes)
+        or too few
         '''
         min_area = (edges.shape[0] + edges.shape[1])/18
         _, labels, stats, _ = cv2.connectedComponentsWithStats(edges)
         filtered = np.zeros(edges.shape, np.uint8)
         stats = stats[1:]
-        idx = 0
+        idx, val_area = 0, 0
         if len(stats) > 0:
             for i in range(len(stats)):
                 ratio = stats[i,2]/stats[i,3]
                 if (0.2 < ratio < 5) and stats[i,4] > min_area:
                     idx = i+1
                     filtered[labels == idx] = 255
+                val_area += stats[i,4]
+        if val_area/min_area > 29 or val_area/min_area < 10:
+            filtered = np.zeros(edges.shape, np.uint8)
         return filtered
-
-
-    def __blob_center(self, img):
-        _, thresh = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
-        cv2.imshow('testando', thresh)
-        _, labels, stats, _ = cv2.connectedComponentsWithStats(thresh)
-        x = stats[1,0]
-        y = stats[1,1]
-        w = stats[1,2]
-        h = stats[1,3]
-        return (x+w//2, y+h//2)
 
 
     def __find_edges(self, img, intensity_values=25):
@@ -368,7 +291,7 @@ class EyeImageProcessor(imp.ImageProcessor):
         bin_img = cv2.inRange(img, np.array(0), np.array(lowest_spike_index + self.intensity_range))
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7,7))
         bin_img = cv2.dilate(bin_img, kernel, iterations=2)
-        spec_mask = cv2.inRange(img, np.array(0), np.array(highest_spike_index-5))
+        spec_mask = cv2.inRange(img, np.array(0), np.array(highest_spike_index - 5))
         spec_mask = cv2.erode(spec_mask, kernel)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (9,9))
         img = cv2.morphologyEx(img, cv2.MORPH_OPEN, kernel)

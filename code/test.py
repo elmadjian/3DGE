@@ -106,8 +106,8 @@ if sys.argv[1] == "--eye":
 if sys.argv[1] == '--3D':
     #cap = cv2.VideoCapture('pupil.mp4')
     #cap = cv2.VideoCapture('pupil2.mkv')
-    cap = cv2.VideoCapture('glasses.avi')
-    #cap = cv2.VideoCapture('glasses2.avi')
+    #cap = cv2.VideoCapture('glasses.avi')
+    cap = cv2.VideoCapture('glasses2.avi')
     #cap = cv2.VideoCapture('demo.mp4')
     #cap = cv2.VideoCapture('test.avi')
     #eyeobj = eip.EyeImageProcessor(0,(400,400),0,0,0,0)
