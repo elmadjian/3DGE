@@ -62,7 +62,8 @@ class EyeFitter():
         '''
         if ellipse is not None:
             ((xc,yc), (w,h), radian) = ellipse
-            xcc, ycc = xc.copy(), yc.copy()
+            #xcc, ycc = xc.copy(), yc.copy()
+            xcc, ycc = xc, yc
             im_w, im_h = image.shape[1], image.shape[0]
             xcc = xcc - im_w/2
             ycc = ycc - im_h/2

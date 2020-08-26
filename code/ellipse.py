@@ -23,7 +23,6 @@ class Ellipse():
         self.height = h
         self.radian = phi
 
-
     def __fit(self, data):
         x,y = np.asarray(data, dtype=float)
         D1 = np.mat(np.vstack([x**2, x*y, y**2])).T
@@ -38,6 +37,19 @@ class Ellipse():
         a1 = eig_vec[:,np.nonzero(cond.A > 0)[1]]
         a2 = -S3.I * S2.T * a1
         return a1, a2
+
+    def get_residual(self, data):
+        x,y = np.asarray(data, dtype=float)
+        D = np.mat(np.vstack([x**2, x*y, y**2, x, y, np.ones(len(x))])).T
+        a = self.coef[0,0]
+        b = self.coef[1,0]/2.
+        c = self.coef[2,0]
+        d = self.coef[3,0]/2.
+        f = self.coef[4,0]/2.
+        g = self.coef[5,0]
+        coef = np.mat([a,b,c,d,f,g]).T
+        R = D*coef
+        return R
 
     def __create_parameters(self):
         a = self.coef[0,0]
