@@ -18,11 +18,12 @@ Rectangle {
     property alias comboResolution: comboResolution
     property alias dialGamma: dialGamma
     property alias switchColor: switchColor
+    property alias switchFlip: switchFlip
 
     Text {
         id: textFrameRate
         x: 25
-        y: 24
+        y: 20
         color: "#ffffff"
         text: qsTr("Frame Rate")
         font.pixelSize: 12
@@ -31,7 +32,7 @@ Rectangle {
     ComboBox {
         id: comboFrameRate
         x: 25
-        y: 44
+        y: 40
         width: 125
         height: 25
         z:3
@@ -41,7 +42,7 @@ Rectangle {
     Text {
         id: textResolution
         x: 25
-        y: 89
+        y: 80
         color: "#ffffff"
         text: qsTr("Resolution")
         font.pixelSize: 12
@@ -50,7 +51,7 @@ Rectangle {
     ComboBox {
         id: comboResolution
         x: 25
-        y: 108
+        y: 100
         width: 125
         height: 25
         z:3
@@ -60,7 +61,7 @@ Rectangle {
     Text {
         id: textGamma
         x: 25
-        y: 157
+        y: 145
         color: "#ffffff"
         text: qsTr("Gamma")
         font.pixelSize: 12
@@ -69,7 +70,7 @@ Rectangle {
     Dial {
         id: dialGamma
         x: 23
-        y: 167
+        y: 160
         width: 56
         height: 88
         wheelEnabled: false
@@ -112,7 +113,7 @@ Rectangle {
     Text {
         id: textColor
         x: 115
-        y: 157
+        y: 145
         color: "#ffffff"
         text: qsTr("Color")
         font.pixelSize: 12
@@ -120,8 +121,8 @@ Rectangle {
 
     Switch {
         id: switchColor
-        x: 99
-        y: 185
+        x: 100
+        y: 156
         width: 61
         height: 44
         padding: 0
@@ -132,6 +133,31 @@ Rectangle {
         spacing: 5
         checked: true
         font.pointSize: 8
+    }
+
+    Text {
+        id: textFlip
+        x: 115
+        y: 201
+        color: "#ffffff"
+        text: qsTr("Flip")
+        font.pixelSize: 12
+    }
+
+    Switch {
+        id: switchFlip
+        x: 100
+        y: 210
+        width: 61
+        height: 44
+        bottomPadding: 4
+        font.pointSize: 8
+        checked: false
+        rightPadding: 4
+        spacing: 5
+        leftPadding: 4
+        topPadding: 4
+        padding: 0
     }
 
     Image {
@@ -168,6 +194,8 @@ Rectangle {
             }
         }
     }
+
+
 }
 
 

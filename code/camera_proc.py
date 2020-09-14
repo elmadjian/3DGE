@@ -28,7 +28,6 @@ class Camera(QQuickImageProvider, QObject):
         self.modes = {}
         self.mode = None         # --> subclassed property
         self.shared_array = None # --> subclassed property
-        self.shared_pos = None   # --> subclassed property
         self.source = None
         self.cap = None
         self.pipe, self.child = Pipe()
@@ -45,6 +44,7 @@ class Camera(QQuickImageProvider, QObject):
             time.sleep(0.005)
             try:
                 img = self.__get_shared_np_array()
+                img = self.process(img)
                 self.__np_img = img
                 qimage = self.to_QPixmap(img)
                 if qimage is not None:
@@ -63,6 +63,9 @@ class Camera(QQuickImageProvider, QObject):
         h = mode[1]
         return Array(ctypes.c_uint8, h*w*3, lock=False)
 
+    def process(self, img):
+        return img
+
     def requestImage(self, id, size, requestedSize):
         return self.__image
 
@@ -72,14 +75,16 @@ class Camera(QQuickImageProvider, QObject):
     def get_np_image(self):
         return self.__np_img
 
-    def get_processed_data(self):
-        nparray = np.frombuffer(self.shared_pos, dtype=ctypes.c_float)
-        return nparray
+    def get_processed_data(self): #abstract
+        return
 
-    def init_process(self, source, pipe, array, pos, mode, cap): #abstract
+    def reset_model(self): #abstract
+        return
+
+    def init_process(self, source, pipe, array, mode, cap): #abstract
         return 
 
-    def init_vid_process(self, source, pipe, array, pos, mode, cap): #abstract
+    def init_vid_process(self, source, pipe, array, mode, cap): #abstract
         return
 
     def join_process(self): #abstract
@@ -133,7 +138,7 @@ class Camera(QQuickImageProvider, QObject):
         self.shared_array = self.create_shared_array(self.mode)
         self.capturing.value = 1
         self.init_process(source, self.child, self.shared_array, 
-                          self.shared_pos, self.mode, self.capturing)
+                          self.mode, self.capturing)
         self.cam_thread = Thread(target=self.thread_loop, args=())
         self.save_state()
         self.cam_thread.start()
@@ -159,7 +164,7 @@ class Camera(QQuickImageProvider, QObject):
     def play_video_file(self):
         self.capturing.value = 1
         self.init_vid_process(self.source, self.child, self.shared_array, 
-                    self.shared_pos, self.mode, self.capturing)
+                    self.mode, self.capturing)
         self.cam_thread = Thread(target=self.thread_loop, args=())
         self.cam_thread.start()
 
@@ -221,7 +226,7 @@ class Camera(QQuickImageProvider, QObject):
         self.pipe, self.child = Pipe()
         self.capturing.value = 1
         self.init_process(self.source, self.child, self.shared_array, 
-                          self.shared_pos, self.mode, self.capturing)
+                          self.mode, self.capturing)
         self.cam_thread = Thread(target=self.thread_loop, args=())
         self.save_state()
         self.cam_thread.start()
@@ -238,9 +243,15 @@ class Camera(QQuickImageProvider, QObject):
         self.pipe.send("color")
         self.pipe.send(bool(value))
 
+    @Slot(float)
+    def flip_image(self, value):
+        self.flip = value
+        self.pipe.send("flip")
+        self.pipe.send(bool(value))
+
     @Slot()
-    def reset_axis(self):
-        self.pipe.send("reset_axis")
+    def reset(self):
+        self.reset_model()
 
     def to_QPixmap(self, img):
         if len(img.shape) == 3:
@@ -265,6 +276,8 @@ class Camera(QQuickImageProvider, QObject):
             with open('config/'+self.name+'config.txt', 'r') as f:
                 d = f.readline().split(':')
                 self.mode = (int(d[0]), int(d[1]), int(d[2]))
+
+
 
     
 

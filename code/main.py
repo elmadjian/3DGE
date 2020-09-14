@@ -14,10 +14,12 @@ import multiprocessing as mp
 if __name__=='__main__':
     #mp.set_start_method('spawn')
     app = QGuiApplication(sys.argv)
+    app.setOrganizationName('Cadu')
+    app.setOrganizationDomain('Nowhere')
     engine = QQmlApplicationEngine()
     
     videoio   = videoio_uvc.VideoIO_UVC()
-    calib_hmd = calibration_hmd.HMDCalibrator(3, 3, 60, 4) 
+    calib_hmd = calibration_hmd.HMDCalibrator(3, 3, 21, 3) 
 
     le_cam    = eye.EyeCamera('left')
     re_cam    = eye.EyeCamera('right')

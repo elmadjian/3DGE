@@ -2,7 +2,9 @@ import cv2
 import numpy as np
 import time
 import os
+import re
 import socket
+import traceback
 import data_storage as ds
 from PySide2.QtCore import QObject, Signal, Slot, Property
 from sklearn.gaussian_process import GaussianProcessRegressor
@@ -22,10 +24,8 @@ class HMDCalibrator(QObject):
         '''
         QObject.__init__(self)
         self.target_list = self.__generate_target_list(v_targets, h_targets)
-        self.storer = ds.Storer(self.target_list, True)
-        self.l_regressor = None
-        self.r_regressor = None
-        self.z_regressor = None
+        self.storer = ds.Storer()
+        self.left_mat, self.right_mat = None, None
         self.current_target = -1
         self.leye, self.reye = None, None
         self.samples = samples_per_tgt
@@ -33,10 +33,7 @@ class HMDCalibrator(QObject):
         self.collector = None
         self.predictor = None
         self.stream = False
-        self.vergence = None
-        self.mode_3D = False
         self.storage = False
-        self.depth_buffer = []
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.bind(("0.0.0.0", 50021))
         self.ip, self.port = self.load_network_options()
@@ -45,7 +42,7 @@ class HMDCalibrator(QObject):
     def set_sources(self, leye, reye):
         self.leye = leye
         self.reye = reye
-        self.storer.set_sources(None, leye, reye)
+        self.storer.set_sources(leye, reye)
 
     def set_vergence_control(self, vergence):
         self.vergence = vergence
@@ -60,63 +57,45 @@ class HMDCalibrator(QObject):
     
 
     def __generate_target_list(self, v, h):
+        '''
+        Generate a uniformly distributed set of calibration targets and test 
+        targets based on a predefined number of vertical and horizontal 
+        targets on object construction.
+        '''
         target_list = []
         for y in np.linspace(-1,1, v):
             for x in np.linspace(-1,1, h):
                 target_list.append(np.array([x,y,1], dtype=np.float32))
-        seed = np.random.randint(0,99)
-        rnd  = np.random.RandomState(seed)
-        rnd.shuffle(target_list)
+        #seed = np.random.randint(0,99)
+        #rnd  = np.random.RandomState(seed)
+        #rnd.shuffle(target_list)
         return target_list
 
-    def __generate_depth_list(self, nz):
-        target_list = []
-        for p in np.logspace(0.36,1, nz)/10.0:
-            target_list.append(np.array([0,0,p], dtype=np.float))
-        return target_list
-
-
-    def __get_target_data(self, maxfreq, minfreq):
+    def __get_target_data(self, vecs, maxfreq, minfreq):
         '''
-        scene: sceneCamera object
-        le: left eyeCamera object
-        re: right eyeCamera object
-        thresh: amount of data to be collected per target
+        Captures data from the eye img processor
+        ----
         '''
         idx = self.current_target
         t = time.time()
-        tgt = self.storer.targets
+        lct, rct = self.storer.l_centers, self.storer.r_centers
+        vecs = re.sub('\(', '', vecs)
+        vecs = re.sub('\)', '', vecs)
+        _, l_vec, r_vec = vecs.split(';')
+        self.storer.l_targets[idx] = np.array([float(v) for v in l_vec.split(',')])
+        self.storer.r_targets[idx] = np.array([float(v) for v in r_vec.split(',')])
 
-        while (len(tgt[idx]) < self.samples) and (time.time()-t < self.timeout):
-            self.storer.collect_data(idx, self.mode_3D, minfreq)
-            tgt = self.storer.targets
+        while (len(lct[idx]) < self.samples) and (len(rct[idx]) < self.samples)\
+        and (time.time()-t < self.timeout):
+            self.storer.collect_data(idx, minfreq)
+            lct, rct = self.storer.l_centers, self.storer.r_centers
             time.sleep(1/maxfreq)
         self.move_on.emit()
         print("number of samples collected: l->{}, r->{}".format(
             len(self.storer.l_centers[idx]),
             len(self.storer.r_centers[idx])))
+        self.storer.replace_by_median(idx)
 
-
-    def __get_depth_data(self, maxfreq, minfreq):
-        idx = self.current_target
-        t = time.time()
-        tgt = self.storer.depth_t
-        while (len(tgt[idx]) < self.samples) and (time.time()-t < self.timeout):
-            pred = self.__predict()         
-            dist = self.__get_dist(pred)
-            self.storer.collect_depth_data(idx, dist, self.mode_3D, minfreq)
-            tgt = self.storer.depth_t
-            time.sleep(1/maxfreq)
-        self.move_on.emit()
-        print("number of samples collected: {}".format(
-            len(self.storer.dist[idx])))
-
-    def __get_dist(self, pred):
-        le_data, re_data = np.array(pred[:2]), np.array(pred[3:5])
-        vec = re_data - le_data
-        dist = np.sqrt(vec[0]**2 + vec[1]**2)
-        return dist
-        
     
     @Property('QVariantList')
     def target(self):
@@ -125,107 +104,81 @@ class HMDCalibrator(QObject):
         tgt = self.target_list[self.current_target]
         return [float(tgt[0]), float(tgt[1])]
 
-    @Property('QVariantList')
-    def depth_target(self):
-        if self.current_target >= len(self.depth_list):
-            return [-9,-9]
-        tgt = self.depth_list[self.current_target]
-        return [float(tgt[0]), float(tgt[0])]
-
     def start_calibration(self):
         print('resetting calibration')
         self.storer.initialize_storage(len(self.target_list))
-        self.l_regressor = None
-        self.r_regressor = None
+        self.left_mat = None
+        self.right_mat = None
         if self.predictor is not None:
             self.stream = False
             self.predictor.join()
         self.current_target = -1
 
     @Slot()
-    def start_depth_calibration(self):
-        print('starting depth calibration')
-        self.depth_list  = self.__generate_depth_list(5)
-        self.storer.set_target_list(self.depth_list)
-        self.storer.initialize_depth_storage(len(self.depth_list))
-        self.current_target = -1
-        
-
-    @Slot()
     def next_target(self):
+        '''
+        Called every time we move to a new calibration target
+        using the SPACE or DOUBLECLICK
+        '''
         if self.collector is not None:
             self.collector.join()
         self.current_target += 1
         if self.current_target >= len(self.target_list):
-            self.socket.sendto("D".encode(), (self.ip, self.port))
+            self.socket.sendto("F".encode(), (self.ip, self.port))
             return
         tgt = self.target_list[self.current_target]
         msg = 'N:' + str(tgt[0]) + ':' + str(tgt[1]) + ':' + str(tgt[2])
         self.socket.sendto(msg.encode(), (self.ip, self.port))
 
-    @Slot()
-    def next_depth_target(self):
-        if self.collector is not None:
-            self.collector.join()
-        self.current_target += 1
-        if self.current_target >= len(self.depth_list):
-            self.socket.sendto("F".encode(), (self.ip, self.port))
-            return
-        tgt = self.depth_list[self.current_target]
-        msg = 'N:' + str(tgt[0]) + ':' + str(tgt[1]) + ':' + str(tgt[2])
-        self.socket.sendto(msg.encode(), (self.ip, self.port))
-   
 
     @Slot(int, int)
     def collect_data(self, minfq, maxfq):
+        '''
+        It is called to capture data provided by the eye img processor
+        '''
         msg = 'R'.encode()
         self.socket.sendto(msg, (self.ip, self.port))
-        self.collector = Thread(target=self.__get_target_data, args=(minfq,maxfq,))
+        vecs = self.socket.recv(1024).decode()
+        self.collector = Thread(target=self.__get_target_data, args=(vecs,minfq,maxfq,))
         self.collector.start()
 
-    @Slot(int, int)
-    def collect_depth_data(self, minfq, maxfq):
-        msg = 'R'.encode()
-        self.socket.sendto(msg, (self.ip, self.port))
-        self.collector = Thread(target=self.__get_depth_data, args=(minfq,maxfq,))
-        self.collector.start()
+    @Slot()
+    def store_calibration(self):
+        self.storer.store_calib_debug()
+        print('>>> calibration saved')
 
     @Slot()
     def perform_estimation(self):
         '''
-        Finds a gaze estimation function to be used for 
-        future predictions. Based on Gaussian Processes regression.
-        '''
-        clf_l = self.__get_clf()
-        clf_r = self.__get_clf()        
-        targets = self.storer.get_targets_list()                         
-        if self.leye.is_cam_active():           
-            l_centers = self.storer.get_l_centers_list(self.mode_3D)     
-            clf_l.fit(l_centers, targets)
-            self.l_regressor = clf_l
+        Finds the rotation matrix that transforms eye normals
+        from eye camera to HMD coordinate space.
+        We use least squares method.
+
+        TODO HERE
+        - avaliar no unity
+        - checar teste de profundidade
+
+        '''       
+        if self.leye.is_cam_active(): 
+            l_tgt = self.storer.get_l_targets_list()
+            l_norm = self.storer.get_l_centers_list()
+            row_1 = np.linalg.lstsq(l_norm, l_tgt.T[0,:])[0]
+            row_2 = np.linalg.lstsq(l_norm, l_tgt.T[1,:])[0]
+            row_3 = np.linalg.lstsq(l_norm, l_tgt.T[2,:])[0]
+            self.left_mat = np.vstack((row_1, row_2, row_3))
         if self.reye.is_cam_active():
-            r_centers = self.storer.get_r_centers_list(self.mode_3D)
-            clf_r.fit(r_centers, targets)
-            self.r_regressor = clf_r
+            r_tgt = self.storer.get_r_targets_list()
+            r_norm = self.storer.get_r_centers_list()
+            row_1 = np.linalg.lstsq(r_norm, r_tgt.T[0,:])[0]
+            row_2 = np.linalg.lstsq(r_norm, r_tgt.T[1,:])[0]
+            row_3 = np.linalg.lstsq(r_norm, r_tgt.T[2,:])[0]
+            self.right_mat = np.vstack((row_1, row_2, row_3))
         print("Gaze estimation finished")
         if self.storage:
             self.storer.store_calibration()
-
-    @Slot()
-    def perform_depth_estimation(self):
-        clf_z = self.__get_clf()
-        targets = self.storer.get_depth_t_list()
-        dist = self.storer.get_dist_list()
-        clf_z.fit(dist, targets)
-        self.z_regressor = clf_z
-        print("Depth estimation finished")
-        #
-        #TODO: code for storage
-        #
-        if self.z_regressor is not None:
-            self.stream = True
-            self.predictor = Thread(target=self.predict, args=())
-            self.predictor.start()
+        self.stream = True
+        self.predictor = Thread(target=self.predict, args=())
+        self.predictor.start()
 
 
     def predict(self):
@@ -237,13 +190,12 @@ class HMDCalibrator(QObject):
                     data = self.__predict()
                     x1, y1, z1 = data[0], data[1], data[2]
                     x2, y2, z2 = data[3], data[4], data[5]
-                    z = self.__get_depth_val(z1)
-                    d = 1.0/z
-                    x1, y1, z1 = '{:.8f}'.format(x1/d), '{:.8f}'.format(y1/d), '{:.8f}'.format(z)
-                    x2, y2, z2 = '{:.8f}'.format(x2/d), '{:.8f}'.format(y2/d), '{:.8f}'.format(z)
+                    x1, y1, z1 = '{:.8f}'.format(x1), '{:.8f}'.format(y1), '{:.8f}'.format(z1)
+                    x2, y2, z2 = '{:.8f}'.format(x2), '{:.8f}'.format(y2), '{:.8f}'.format(z2)
                     msg = 'G:'+x1+':'+y1+':'+z1+':'+x2+':'+y2+':'+z2
                     self.socket.sendto(msg.encode(), (self.ip, self.port))
             except Exception as e:
+                traceback.print_exc()
                 print("no request from HMD...", e)
                 count += 1
                 if count > 3:
@@ -251,50 +203,19 @@ class HMDCalibrator(QObject):
         
 
     def __predict(self):
-        data = [-9,-9,-9,-9]
         pred = [-9,-9,-9,-9,-9,-9]
-        if self.l_regressor is not None:
+        if self.left_mat is not None:
             le = self.leye.get_processed_data()
             if le is not None:
-                input_data = le[:2].reshape(1,-1)
-                le_c = self.l_regressor.predict(input_data)[0]
-                data[0], data[1] = input_data[0]
-                pred[0], pred[1], pred[2] = float(le_c[0]), float(le_c[1]), float(le_c[2])
-        if self.r_regressor is not None:
+                l_transform = np.dot(self.left_mat, le[:3])
+                pred[0], pred[1], pred[2] = l_transform
+        if self.right_mat is not None:
             re = self.reye.get_processed_data()
             if re is not None:
-                input_data = re[:2].reshape(1,-1)
-                re_c = self.r_regressor.predict(input_data)[0]
-                data[2], data[3] = input_data[0]
-                pred[3], pred[4], pred[5] = float(re_c[0]), float(re_c[1]), float(re_c[2])
-            if self.z_regressor is not None and self.l_regressor is not None:
-                dist = self.__get_dist(pred)
-                input_data = np.array([dist]).reshape(1,-1)
-                z = self.z_regressor.predict(input_data)[0]
-                pred[2], pred[5] = float(z[0]), float(z[0])
-        if self.storage:
-            l_gz, r_gz   = pred[:3], pred[3:]
-            l_raw, r_raw = data[:2], data[2:]
-            self.storer.append_session_data(l_gz, r_gz, l_raw, r_raw)
+                r_transform = np.dot(self.right_mat, re[:3])
+                pred[3], pred[4], pred[5] = r_transform
         return pred
 
-    def __get_depth_val(self, curr):
-        self.depth_buffer.append(curr)
-        if len(self.depth_buffer) < 30:
-            return 1.0
-        else:
-            self.depth_buffer.pop(0)
-            return np.median(self.depth_buffer)
-
-
-
-    def __get_clf(self):
-        kernel = 1.5*kernels.RBF(length_scale=1.0, length_scale_bounds=(0.0,1.0))
-        clf = GaussianProcessRegressor(alpha=1e-5,
-                                       optimizer=None,
-                                       n_restarts_optimizer=3,
-                                       kernel = kernel)
-        return clf
 
     @Property(str)
     def hmd_ip(self):
@@ -315,6 +236,11 @@ class HMDCalibrator(QObject):
 
     @Slot()
     def connect(self):
+        '''
+        Called when the user wants to connect with the HMD.
+        Upon successful connection, calibration routine starts
+        automagically
+        '''
         self.socket.settimeout(10)
         try:
             self.socket.sendto('C'.encode(), (self.ip, self.port))
@@ -326,9 +252,6 @@ class HMDCalibrator(QObject):
             self.conn_status.emit(False)
             print("Connection error:", e)
 
-    @Slot()
-    def toggle_3D(self):
-        self.mode_3D = not self.mode_3D
 
     @Slot()
     def toggle_storage(self):
@@ -338,8 +261,3 @@ class HMDCalibrator(QObject):
     def save_session(self):
         if self.storage:
             self.storer.store_session()
-
-                
-
-
-   

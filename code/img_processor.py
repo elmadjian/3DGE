@@ -6,18 +6,18 @@ import sys
 import time
 import numpy as np
 import ctypes
+import traceback
 
 
 class ImageProcessor(Process):
 
-    def __init__(self, source, mode, pipe, array, pos, cap):
+    def __init__(self, source, mode, pipe, array, cap):
         Process.__init__(self)
         self.eye_cam = False
         self.source = source
         self.mode = mode
         self.pipe = pipe
         self.shared_array = array
-        self.shared_pos = pos
         self.capturing = cap
     
     def __get_shared_np_array(self, img):
@@ -34,6 +34,11 @@ class ImageProcessor(Process):
         if color:
             return img
         return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    def __flip_img(self, img, flip):
+        if flip:
+            return cv2.flip(img, -1)
+        return img
 
     def __reset_mode(self, cap):
         print("resetting...")
@@ -59,20 +64,16 @@ class ImageProcessor(Process):
     def run_vid(self):
         self.capturing.value = 1
         cap = cv2.VideoCapture(self.source)
-        gamma, color, delay, mode_3D = 1, True, 1/self.mode[2], False
+        gamma, color, delay, flip = 1, True, 1/self.mode[2], False
         while cap.isOpened():
             ret, frame = cap.read()
             if ret:
                 img = self.__adjust_gamma(frame, gamma)
                 img = self.__cvtBlackWhite(img, color)
-                img, pos = self.process(img, mode_3D)
+                img = self.__flip_img(img, flip)
                 if img is not None:
                     shared_img = self.__get_shared_np_array(img)
-                    shared_pos = np.frombuffer(self.shared_pos,
-                                               dtype=ctypes.c_float)
                     np.copyto(shared_img, img)
-                    if pos is not None:
-                        np.copyto(shared_pos, pos)
                 time.sleep(delay)
             if self.pipe.poll():
                 msg = self.pipe.recv()
@@ -82,14 +83,13 @@ class ImageProcessor(Process):
                 elif msg == "pause":
                     while msg != "play":
                         msg = self.pipe.recv()
-                elif msg == "mode_3D":
-                    mode_3D = not mode_3D
                 elif msg == "gamma":
                     gamma = self.pipe.recv()
                 elif msg == "color":
                     color = self.pipe.recv()
-                elif msg == "reset_axis":
-                    self.reset_center_axis()
+                elif msg == "flip":
+                    flip = self.pipe.recv()
+
         cap.release()
         self.capturing.value = 0
 
@@ -101,43 +101,33 @@ class ImageProcessor(Process):
         self.__setup_eye_cam(cap)
         cap.frame_mode = self.mode
         attempt, attempts = 0, 6
-        gamma, color, mode_3D = 1, True, False
+        gamma, color, flip = 1, True, False
         while attempt < attempts:     
             try:
-                frame    = cap.get_frame(2.0)
-                img      = self.__adjust_gamma(frame.bgr, gamma)
-                img      = self.__cvtBlackWhite(img, color)
-                img, pos = self.process(img, mode_3D)               
+                frame = cap.get_frame(2.0)
+                img   = self.__adjust_gamma(frame.bgr, gamma)
+                img   = self.__cvtBlackWhite(img, color)   
+                img   = self.__flip_img(img, flip)       
                 if img is not None:
                     attempt = 0
                     shared_img = self.__get_shared_np_array(img)
-                    shared_pos = np.frombuffer(self.shared_pos, 
-                                               dtype=ctypes.c_float)
                     np.copyto(shared_img, img)
-                    if pos is not None:
-                        np.copyto(shared_pos, pos)
             except Exception as e:
-                print("error:", e)
+                traceback.print_exc()
                 cap = self.__reset_mode(cap)
                 attempt += 1           
             if self.pipe.poll():
                 msg = self.pipe.recv()
                 if msg == "stop": 
                     break
-                elif msg == "mode_3D":
-                    mode_3D = not mode_3D
                 elif msg == "gamma":
                     gamma = self.pipe.recv()
                 elif msg == "color":
                     color = self.pipe.recv()
-                elif msg == "reset_axis":
-                    self.reset_center_axis()
+                elif msg == "flip":
+                    flip = self.pipe.recv()
         self.capturing.value = 0
         print("camera", self.source, "closed")
-
-
-    def process(self, frame):
-        return frame, None
 
     def reset_center_axis(self):
         return None

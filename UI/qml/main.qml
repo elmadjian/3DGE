@@ -12,7 +12,7 @@ Window {
     width: 1050
     height: 500
     color: "#202020"
-    title: qsTr("3D Gaze Eye Tracker")
+    title: qsTr("3D Gaze AR Eye Tracker")
     Universal.theme: Universal.Dark
     Universal.accent: Universal.Lime
     // @disable-check M16
@@ -56,7 +56,7 @@ Window {
             height: 35
             source: "../imgs/reload-icon.png"
             fillMode: Image.PreserveAspectFit
-            opacity: 0
+            opacity: 1
             anchors.right: parent.right
             anchors.bottom: parent.bottom
 
@@ -66,7 +66,7 @@ Window {
                 cursorShape: Qt.PointingHandCursor
                 anchors.fill: parent
                 onClicked: {
-                    leftEyeCam.reset_axis();
+                    leftEyeCam.reset();
                 }
             }
         }
@@ -173,7 +173,7 @@ Window {
             height: 35
             source: "../imgs/reload-icon.png"
             fillMode: Image.PreserveAspectFit
-            opacity: 0
+            opacity: 1
             anchors.right: parent.right
             anchors.bottom: parent.bottom
 
@@ -183,7 +183,7 @@ Window {
                 cursorShape: Qt.PointingHandCursor
                 anchors.fill: parent
                 onClicked: {
-                    rightEyeCam.reset_axis();
+                    rightEyeCam.reset();
                 }
             }
         }
@@ -489,6 +489,9 @@ Window {
                     switchColor.onToggled: {
                         leftEyeCam.set_color(switchColor.position);
                     }
+                    switchFlip.onToggled: {
+                        leftEyeCam.flip_image(switchFlip.position);
+                    }
                 }
             }
         }
@@ -569,6 +572,9 @@ Window {
                     }
                     switchColor.onToggled: {
                         rightEyeCam.set_color(switchColor.position);
+                    }
+                    switchFlip.onToggled: {
+                        rightEyeCam.flip_image(switchFlip.position);
                     }
                 }
             }
@@ -673,42 +679,6 @@ Window {
                 font.pointSize: 8
                 onCheckedChanged: {
                     calibHMD.toggle_storage();
-                }
-            }
-        }
-
-        //3D MANAGEMENT
-        //------------
-        ColumnLayout {
-            x: 226
-            y:0
-            width: 60
-            Layout.fillHeight: false
-            Layout.fillWidth: false
-            Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
-
-            Text {
-                id: calibration3DLabel
-                text: qsTr("3D Model")
-                color: "white"
-                horizontalAlignment: Text.AlignHCenter
-            }
-            Switch {
-                id: switch3DModel
-                width: 50
-                height: 40
-                checked: false
-                font.pointSize: 8
-                onCheckedChanged: {
-                    camManager.toggle_3D();
-                    calibHMD.toggle_3D();
-                    if (switch3DModel.checked) {
-                        leftIcon3d.opacity  = 1;
-                        rightIcon3d.opacity = 1;
-                    } else {
-                        leftIcon3d.opacity  = 0;
-                        rightIcon3d.opacity = 0;
-                    }
                 }
             }
         }

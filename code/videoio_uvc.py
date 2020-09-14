@@ -36,11 +36,6 @@ class VideoIO_UVC(QObject):
         self.leye  = leye
         self.reye  = reye
 
-    @Slot()
-    def toggle_3D(self):
-        self.leye.toggle_3D()
-        self.reye.toggle_3D()
-
     @Slot(bool)
     def stop_leye_cam(self, video_file):
         self.leye.stop(video_file)

@@ -11,6 +11,7 @@ from threading import Thread
 import os
 import socket
 import time
+import data_storage as ds
 
 #testing cameras. Use test.py --uvc [cam_id]
 if sys.argv[1] == "--uvc":
@@ -104,10 +105,10 @@ if sys.argv[1] == "--eye":
 
 
 if sys.argv[1] == '--3D':
-    #cap = cv2.VideoCapture('pupil.mp4')
+    cap = cv2.VideoCapture('pupil.mp4')
     #cap = cv2.VideoCapture('pupil2.mkv')
     #cap = cv2.VideoCapture('glasses.avi')
-    cap = cv2.VideoCapture('glasses2.avi')
+    #cap = cv2.VideoCapture('glasses2.avi')
     #cap = cv2.VideoCapture('demo.mp4')
     #cap = cv2.VideoCapture('test.avi')
     #eyeobj = eip.EyeImageProcessor(0,(400,400),0,0,0,0)
@@ -204,5 +205,56 @@ if sys.argv[1] == '--simulate_HMD':
     
 
 
+if sys.argv[1] == '--estimation':
+    storer = ds.Storer()
+    path = "data/test2/debug/"
+    train_data, test_data = storer.load_calib_debug(path)
+    train_l_tgt, train_r_tgt, train_l_norm, train_r_norm = train_data
+    test_l_tgt, test_r_tgt, test_l_norm, test_r_norm = test_data
+    print(train_l_tgt['arr_0'])
+    print('----')
+    print(train_l_norm['arr_0'])
+    input()
+    '''
+    solving for A in Ax = b
+    A is overdetermined
+    A = BX^-1
+    '''
+    X_l = np.empty((0,3))
+    B_l = np.empty((0,3))
+    X_r = np.empty((0,3))
+    B_r = np.empty((0,3))
+    for i in range(len(train_l_tgt['arr_0'])):
+        X_l = np.vstack((X_l, train_l_norm['arr_0'][i]))
+        B_l = np.vstack((B_l, train_l_tgt['arr_0'][i]))
+        X_r = np.vstack((X_r, train_r_norm['arr_0'][i]))
+        B_r = np.vstack((B_r, train_r_tgt['arr_0'][i]))
+    
+    #finding A_l
+    row_1 = np.linalg.lstsq(X_l, B_l.T[0,:])[0]
+    row_2 = np.linalg.lstsq(X_l, B_l.T[1,:])[0]
+    row_3 = np.linalg.lstsq(X_l, B_l.T[2,:])[0]
+    A_l = np.vstack((row_1, row_2, row_3))
 
+    #finding A_r
+    row_1 = np.linalg.lstsq(X_r, B_r.T[0,:])[0]
+    row_2 = np.linalg.lstsq(X_r, B_r.T[1,:])[0]
+    row_3 = np.linalg.lstsq(X_r, B_r.T[2,:])[0]
+    A_r = np.vstack((row_1, row_2, row_3))
+
+
+    print('checking train data...')
+    for j in range(len(train_l_tgt['arr_0'])):
+        print('expected:', train_l_tgt['arr_0'][j])
+        result = np.dot(A_l, train_l_norm['arr_0'][j])
+        print('got:', result)
+        print('------')
+
+    print('\n\nchecking test data...')
+    for k in range(len(test_l_tgt['arr_0'])):
+        print('expected:', test_l_tgt['arr_0'][k])
+        result = np.dot(A_l, test_l_norm['arr_0'][k])
+        print('got:', result)
+        print('------')
+    
 
