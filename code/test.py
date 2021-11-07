@@ -12,6 +12,7 @@ import os
 import socket
 import time
 import data_storage as ds
+from pupil_detectors import Detector3D
 
 #testing cameras. Use test.py --uvc [cam_id]
 if sys.argv[1] == "--uvc":
@@ -43,7 +44,7 @@ if sys.argv[1] == "--rec":
     cap = uvc.Capture(dev_list[2]['uid'])
     cap.frame_mode = (640,480,30)
     cap.bandwidth_factor = 1.3
-    out = cv2.VideoWriter('glasses2.avi', cv2.VideoWriter_fourcc('M','J','P','G'), 30, (640,480))
+    out = cv2.VideoWriter('hololens2.avi', cv2.VideoWriter_fourcc('M','J','P','G'), 30, (640,480))
     while True:
         frame = cap.get_frame()
         out.write(frame.bgr)
@@ -105,24 +106,43 @@ if sys.argv[1] == "--eye":
 
 
 if sys.argv[1] == '--3D':
-    cap = cv2.VideoCapture('pupil.mp4')
+    cap = cv2.VideoCapture('hololens2.avi')
     #cap = cv2.VideoCapture('pupil2.mkv')
     #cap = cv2.VideoCapture('glasses.avi')
     #cap = cv2.VideoCapture('glasses2.avi')
     #cap = cv2.VideoCapture('demo.mp4')
     #cap = cv2.VideoCapture('test.avi')
     #eyeobj = eip.EyeImageProcessor(0,(400,400),0,0,0,0)
-    eyeobj = eip.EyeImageProcessor(0,(480,640),0,0,0,0)
-    sensor_size = (3.6, 4.8) #mm
-    focal_length = 6         #mm
-    #fitter = ef.EyeFitter(focal_length, (400,400), sensor_size)
-    fitter = ef.EyeFitter(focal_length, (480,640), sensor_size)
-    counter = 0
+    detector = Detector3D()
+    detector.update_properties({'2d':{'pupil_size_max':250}})
+    detector.update_properties({'2d':{'pupil_size_min':60}})
+    print(detector.get_properties(), '\n======================')
 
     while cap.isOpened():
-        ret, frame = cap.read()
+        ret, img = cap.read()
         if ret:
-            img, ellipse = eyeobj.process(frame, mode_3D=True)               
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            timestamp = uvc.get_time_monotonic()
+            result = detector.detect(gray, timestamp)
+            print(result['confidence'])
+            #print('-----------------')
+            n = np.array(result['circle_3d']['normal'])
+            ellipse = result["ellipse"]
+            center = tuple(int(v) for v in ellipse["center"])
+            axes = tuple(int(v/2) for v in ellipse["axes"])
+            rad = ellipse["angle"]
+            normal = result["circle_3d"]["normal"]
+            cv2.drawMarker(img, center, (0,255,0), cv2.MARKER_CROSS, 12, 1)
+            cv2.ellipse(img, center, axes, rad, 0, 360, (0,0,255), 2)
+            dest_pos = (int(center[0]+normal[0]*60), int(center[1]+normal[1]*60))
+            cv2.line(img, center, dest_pos, (85,175,20),2)
+            if result['model_confidence'] > 0.5:
+                sphere = result["projected_sphere"]
+                center = tuple(int(v) for v in sphere["center"])
+                axes = tuple(int(v/2) for v in sphere["axes"])
+                rad = sphere["angle"]
+                cv2.ellipse(img, center, axes, rad, 0, 360, (225,115,115), 1)
+          
             cv2.imshow('test', img)
             if cv2.waitKey(0) & 0xFF == ord('q'):
                 break

@@ -47,6 +47,14 @@ class HMDCalibrator(QObject):
     def set_vergence_control(self, vergence):
         self.vergence = vergence
 
+    def _freeze_models(self):
+        self.leye.freeze_model()
+        self.reye.freeze_model()
+
+    def _unfreeze_models(self):
+        self.leye.unfreeze_model()
+        self.reye.unfreeze_model()
+
     def load_network_options(self):
         ip, port = "", ""
         if os.path.isfile('config/hmd_config.txt'):
@@ -79,6 +87,7 @@ class HMDCalibrator(QObject):
         idx = self.current_target
         t = time.time()
         lct, rct = self.storer.l_centers, self.storer.r_centers
+        #print("VECS:", vecs)
         vecs = re.sub('\(', '', vecs)
         vecs = re.sub('\)', '', vecs)
         _, l_vec, r_vec = vecs.split(';')
@@ -106,6 +115,7 @@ class HMDCalibrator(QObject):
 
     def start_calibration(self):
         print('resetting calibration')
+        self._unfreeze_models()
         self.storer.initialize_storage(len(self.target_list))
         self.left_mat = None
         self.right_mat = None
@@ -177,6 +187,7 @@ class HMDCalibrator(QObject):
         if self.storage:
             self.storer.store_calibration()
         self.stream = True
+        self._freeze_models()
         self.predictor = Thread(target=self.predict, args=())
         self.predictor.start()
 

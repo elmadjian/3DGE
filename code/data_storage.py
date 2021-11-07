@@ -32,9 +32,8 @@ class Storer():
         Set eye cam feed providers
         '''
         self.leye  = leye
-        self.reye  = reye
-
-   
+        self.reye  = reye    
+  
     def collect_data(self, idx, minfreq):
         le = self.leye.get_processed_data()
         re = self.reye.get_processed_data()
