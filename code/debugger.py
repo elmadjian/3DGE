@@ -10,6 +10,7 @@ from PySide2.QtCore import QObject, Signal, Slot, Property
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process import kernels
 from threading import Thread
+import pyautogui
 
 
 class HMDCalibrator(QObject):
@@ -34,6 +35,7 @@ class HMDCalibrator(QObject):
         self.predictor = None
         self.stream = False
         self.storage = False
+        self.calibrated = True
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.bind(("0.0.0.0", 50021))
         self.ip, self.port = self.load_network_options()
@@ -122,7 +124,7 @@ class HMDCalibrator(QObject):
                   -> [Unity] Load calibration scene -> [Python] UDP('C')
                   -> [QML] connStatus update -> [Python] self.start_calibration()
         '''
-        self.socket.settimeout(10)
+        self.socket.settimeout(5)
         try:
             self.socket.sendto('C'.encode(), (self.ip, self.port))
             response = self.socket.recv(1024).decode()
@@ -193,11 +195,11 @@ class HMDCalibrator(QObject):
         msg = 'R'.encode()
         self.socket.sendto(msg, (self.ip, self.port))
         vecs = self.socket.recv(1024).decode()
-        self.collector = Thread(target=self.__get_target_data, args=(vecs,minfq,maxfq,))
+        self.collector = Thread(target=self._get_target_data, args=(vecs,))
         self.collector.start()
 
 
-    def _get_target_data(self, vecs, maxfreq, minfreq):
+    def _get_target_data(self, vecs):
         '''
         5. Captures data from the eye img processor associated with
         a particular target 'idx'
@@ -217,10 +219,13 @@ class HMDCalibrator(QObject):
 
         while (len(lct[idx]) < self.samples) and (len(rct[idx]) < self.samples)\
         and (time.time()-t < self.timeout):
-            self.storer.collect_data(idx, minfreq)
-            lct, rct = self.storer.l_centers, self.storer.r_centers
-            time.sleep(1/maxfreq)
+            x,y = pyautogui.position()
+            led, red = np.array([x,y,1]), np.array([x,y,1])
+            lct[idx] = np.vstack((lct[idx], led))
+            rct[idx] = np.vstack((rct[idx], red))
+            time.sleep(1/500)
         self.move_on.emit()
+        print(self.storer.l_centers[idx])
         print("number of samples collected: l->{}, r->{}".format(
             len(self.storer.l_centers[idx]),
             len(self.storer.r_centers[idx])))
@@ -237,25 +242,22 @@ class HMDCalibrator(QObject):
         workflow: -> [Python] np.linalg.lstsq() -> [Python] self._freeze_models()
                   -> [Python] self.predict() (threaded)
         '''       
-        if self.leye.is_cam_active(): 
-            l_tgt = self.storer.get_l_targets_list()
-            l_norm = self.storer.get_l_centers_list()
-            row_1 = np.linalg.lstsq(l_norm, l_tgt.T[0,:])[0]
-            row_2 = np.linalg.lstsq(l_norm, l_tgt.T[1,:])[0]
-            row_3 = np.linalg.lstsq(l_norm, l_tgt.T[2,:])[0]
-            self.left_mat = np.vstack((row_1, row_2, row_3))
-        if self.reye.is_cam_active():
-            r_tgt = self.storer.get_r_targets_list()
-            r_norm = self.storer.get_r_centers_list()
-            row_1 = np.linalg.lstsq(r_norm, r_tgt.T[0,:])[0]
-            row_2 = np.linalg.lstsq(r_norm, r_tgt.T[1,:])[0]
-            row_3 = np.linalg.lstsq(r_norm, r_tgt.T[2,:])[0]
-            self.right_mat = np.vstack((row_1, row_2, row_3))
+        l_tgt = self.storer.get_l_targets_list()
+        l_norm = self.storer.get_l_centers_list()
+        row_1 = np.linalg.lstsq(l_norm, l_tgt.T[0,:])[0]
+        row_2 = np.linalg.lstsq(l_norm, l_tgt.T[1,:])[0]
+        row_3 = np.linalg.lstsq(l_norm, l_tgt.T[2,:])[0]
+        self.left_mat = np.vstack((row_1, row_2, row_3))
+        r_tgt = self.storer.get_r_targets_list()
+        r_norm = self.storer.get_r_centers_list()
+        row_1 = np.linalg.lstsq(r_norm, r_tgt.T[0,:])[0]
+        row_2 = np.linalg.lstsq(r_norm, r_tgt.T[1,:])[0]
+        row_3 = np.linalg.lstsq(r_norm, r_tgt.T[2,:])[0]
+        self.right_mat = np.vstack((row_1, row_2, row_3))
         print("Gaze estimation finished")
         if self.storage:
             self.storer.store_calibration()
         self.stream = True
-        self._freeze_models()
         self.predictor = Thread(target=self.predict, args=())
         self.predictor.start()
 
@@ -281,6 +283,7 @@ class HMDCalibrator(QObject):
                     x1, y1, z1 = '{:.8f}'.format(x1), '{:.8f}'.format(y1), '{:.8f}'.format(z1)
                     x2, y2, z2 = '{:.8f}'.format(x2), '{:.8f}'.format(y2), '{:.8f}'.format(z2)
                     msg = 'G:'+x1+':'+y1+':'+z1+':'+x2+':'+y2+':'+z2
+                    print('sending msg:', msg)
                     self.socket.sendto(msg.encode(), (self.ip, self.port))
             except Exception as e:
                 traceback.print_exc()
@@ -292,16 +295,14 @@ class HMDCalibrator(QObject):
 
     def _predict(self):
         pred = [-9,-9,-9,-9,-9,-9]
+        x,y = pyautogui.position()
+        led, red = np.array([x,y,1]), np.array([x,y,1])
         if self.left_mat is not None:
-            le = self.leye.get_processed_data()
-            if le is not None:
-                l_transform = np.dot(self.left_mat, le[:3])
-                pred[0], pred[1], pred[2] = l_transform
+            l_transform = np.dot(self.left_mat, led)
+            pred[0], pred[1], pred[2] = l_transform
         if self.right_mat is not None:
-            re = self.reye.get_processed_data()
-            if re is not None:
-                r_transform = np.dot(self.right_mat, re[:3])
-                pred[3], pred[4], pred[5] = r_transform
+            r_transform = np.dot(self.right_mat, red)
+            pred[3], pred[4], pred[5] = r_transform
         return pred
 
 

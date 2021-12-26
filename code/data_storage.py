@@ -3,12 +3,6 @@ import os
 import time
 
 class Storer():
-    '''
-    Important:
-    ---------
-    -> 2D: x, y, time, 0, 0, 0, 0
-    -> 3D: x_p, y_p, z_p, x_n, y_n, z_n, time
-    '''
 
     def __init__(self):
         self.l_targets, self.r_targets = None, None
