@@ -10,7 +10,7 @@ from PySide2.QtCore import QObject, Signal, Slot, Property
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process import kernels
 from threading import Thread
-import pyautogui
+from pynput.mouse import Controller
 
 
 class HMDCalibrator(QObject):
@@ -36,11 +36,12 @@ class HMDCalibrator(QObject):
         self.stream = False
         self.storage = False
         self.calibrated = True
+        self.mouse = Controller()
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.socket.bind(("0.0.0.0", 50021))
         self.ip, self.port = self.load_network_options()
 
-
+    
     def set_sources(self, leye, reye):
         self.leye = leye
         self.reye = reye
@@ -219,13 +220,12 @@ class HMDCalibrator(QObject):
 
         while (len(lct[idx]) < self.samples) and (len(rct[idx]) < self.samples)\
         and (time.time()-t < self.timeout):
-            x,y = pyautogui.position()
+            x,y = self.mouse.position
             led, red = np.array([x,y,1]), np.array([x,y,1])
             lct[idx] = np.vstack((lct[idx], led))
             rct[idx] = np.vstack((rct[idx], red))
             time.sleep(1/500)
         self.move_on.emit()
-        print(self.storer.l_centers[idx])
         print("number of samples collected: l->{}, r->{}".format(
             len(self.storer.l_centers[idx]),
             len(self.storer.r_centers[idx])))
@@ -283,7 +283,6 @@ class HMDCalibrator(QObject):
                     x1, y1, z1 = '{:.8f}'.format(x1), '{:.8f}'.format(y1), '{:.8f}'.format(z1)
                     x2, y2, z2 = '{:.8f}'.format(x2), '{:.8f}'.format(y2), '{:.8f}'.format(z2)
                     msg = 'G:'+x1+':'+y1+':'+z1+':'+x2+':'+y2+':'+z2
-                    print('sending msg:', msg)
                     self.socket.sendto(msg.encode(), (self.ip, self.port))
             except Exception as e:
                 traceback.print_exc()
@@ -295,7 +294,7 @@ class HMDCalibrator(QObject):
 
     def _predict(self):
         pred = [-9,-9,-9,-9,-9,-9]
-        x,y = pyautogui.position()
+        x,y = self.mouse.position
         led, red = np.array([x,y,1]), np.array([x,y,1])
         if self.left_mat is not None:
             l_transform = np.dot(self.left_mat, led)
@@ -305,7 +304,7 @@ class HMDCalibrator(QObject):
             pred[3], pred[4], pred[5] = r_transform
         return pred
 
-
+    
     @Slot()
     def toggle_storage(self):
         self.storage = not self.storage
