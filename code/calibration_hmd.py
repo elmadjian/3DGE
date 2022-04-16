@@ -23,7 +23,7 @@ class HMDCalibrator(QObject):
         frequency: value of the tracker's frequency in Hz
         '''
         QObject.__init__(self)
-        self.target_list = self.__generate_target_list(v_targets, h_targets)
+        self.target_list = self._generate_target_list(v_targets, h_targets)
         self.storer = ds.Storer()
         self.left_mat, self.right_mat = None, None
         self.current_target = -1
@@ -64,7 +64,7 @@ class HMDCalibrator(QObject):
         return ip, int(port)
     
 
-    def __generate_target_list(self, v, h):
+    def _generate_target_list(self, v, h):
         '''
         Generate a uniformly distributed set of calibration targets and test 
         targets based on a predefined number of vertical and horizontal 
@@ -193,7 +193,7 @@ class HMDCalibrator(QObject):
         msg = 'R'.encode()
         self.socket.sendto(msg, (self.ip, self.port))
         vecs = self.socket.recv(1024).decode()
-        self.collector = Thread(target=self.__get_target_data, args=(vecs,minfq,maxfq,))
+        self.collector = Thread(target=self._get_target_data, args=(vecs,minfq,maxfq,))
         self.collector.start()
 
 
