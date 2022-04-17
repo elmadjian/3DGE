@@ -4,8 +4,8 @@ from PySide2.QtQml import QQmlApplicationEngine, qmlRegisterType
 from PySide2.QtCore import QUrl, Property, Signal, QObject, Slot
 import eye
 import videoio_uvc
-#import calibration_hmd
-import debugger as calibration_hmd
+import calibration_hmd
+#import debugger as calibration_hmd
 import cv2
 import time
 import numpy as np

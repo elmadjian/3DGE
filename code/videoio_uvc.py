@@ -42,7 +42,7 @@ class VideoIO_UVC(QObject):
 
     @Slot(bool)
     def stop_reye_cam(self, video_file):
-        self.reye_stop(video_file)
+        self.reye.stop(video_file)
 
     @Slot(bool)
     def stop_cameras(self, video_file):
@@ -70,9 +70,17 @@ class VideoIO_UVC(QObject):
             self.reye.stop(video_file=True)
             self.reye.set_video_file(filename)
 
+    # @Slot(str)
+    # def set_camera_last_session(self, cam_id):
+    #     if cam_id.startswith('Left'):
+    #         self.leye.load_last_session_cam()
+    #     else:
+    #         self.reye.load_last_session_cam()
+
     @Slot(str, str)
     def set_camera_source(self, cam_id, cam_name):
         source = int(cam_name.split(':')[0])
+        print('SOURCE:', source)
         if cam_id.startswith("Left"):
             self.__change_cameras(self.leye, self.reye, source)
         else:

@@ -96,6 +96,9 @@ Window {
                     enable_calibration();
                 }
             }
+//            Component.onCompleted: {
+//                camManager.set_camera_last_session(leftEyeTitle.text)
+//            }
         }
 
         FileDialog {
@@ -164,6 +167,8 @@ Window {
         }
         property bool video: false
 
+
+
         Image {
             id: rightIcon3d
             z: 2
@@ -213,6 +218,9 @@ Window {
                     enable_calibration();
                 }
             }
+//            Component.onCompleted: {
+//                camManager.set_camera_last_session(rightEyeTitle.text)
+//            }
         }
 
         FileDialog {
@@ -269,6 +277,9 @@ Window {
         uid.comboResolution.model = camType.modes_list;
         uid.comboFrameRate.currentIndex = camType.current_fps_index;
         uid.comboResolution.currentIndex = camType.current_res_index;
+        uid.dialGamma.value = camType.gamma_state;
+        uid.switchColor.position = camType.color_state;
+        uid.switchFlip.position = camType.flip_state;
     }
 
     function activate_dropdown(uid_active, uid2) {

@@ -10,6 +10,7 @@ from PySide2.QtCore import QObject, Signal, Slot, Property
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process import kernels
 from threading import Thread
+import yaml
 
 
 class HMDCalibrator(QObject):
@@ -57,12 +58,12 @@ class HMDCalibrator(QObject):
 
     def load_network_options(self):
         ip, port = "", ""
-        if os.path.isfile('config/hmd_config.txt'):
-            with open('config/hmd_config.txt', 'r') as hmd_config:
-                data = hmd_config.readline()
-                ip, port = data.split(':')
-        return ip, int(port)
-    
+        filename = os.path.join('config', 'hmd_config.yaml')
+        with open(filename, 'r') as f:
+            data = yaml.load(f, Loader=yaml.FullLoader)
+            ip = data['ip'] 
+            port = data['port']
+        return ip, port    
 
     def _generate_target_list(self, v, h):
         '''
@@ -93,7 +94,6 @@ class HMDCalibrator(QObject):
         self.storer.store_calib_debug()
         print('>>> calibration saved')
      
-
     @Property(str)
     def hmd_ip(self):
         return self.ip
@@ -102,14 +102,15 @@ class HMDCalibrator(QObject):
     def hmd_port(self):
         return self.port        
 
-
     @Slot(str, str)
     def update_network(self, ip, port):
         self.ip, self.port = ip, int(port)
-        with open('config/hmd_config.txt', 'w') as hmd_config:
-            text = ip + ':' + port
-            hmd_config.write(text)
-
+        filename = os.path.join('config', 'hmd_config.yaml')
+        data = {}
+        data['ip'] = ip
+        data['port'] = self.port
+        with open(filename, 'w') as f:
+            yaml.dump(data, f)
 
     @Slot()
     def connect(self):

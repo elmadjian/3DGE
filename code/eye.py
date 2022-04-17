@@ -147,6 +147,7 @@ class EyeCamera(camera.Camera):
 
 
     def reset_model(self):
+        self.unfreeze_model()
         self.detector.reset_model()
 
 

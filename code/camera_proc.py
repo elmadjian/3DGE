@@ -11,6 +11,8 @@ import sys
 import traceback
 import ctypes
 import os
+import yaml
+
 
 class Camera(QQuickImageProvider, QObject):
 
@@ -37,6 +39,7 @@ class Camera(QQuickImageProvider, QObject):
         self.paused = False
         self.gamma = 1.0
         self.color = True
+        self.flip = False
         
 
     def thread_loop(self):
@@ -56,7 +59,9 @@ class Camera(QQuickImageProvider, QObject):
     def __get_shared_np_array(self):
         nparray = np.frombuffer(self.shared_array, dtype=ctypes.c_uint8)
         w, h = self.mode[0], self.mode[1]
-        return nparray.reshape((h,w,3))
+        if len(nparray) == h * w * 3:
+            return nparray.reshape((h,w,3))
+        return np.ones((h,w,3), dtype=ctypes.c_uint8)
 
     def create_shared_array(self, mode):
         w = mode[0]
@@ -212,6 +217,18 @@ class Camera(QQuickImageProvider, QObject):
         res_list = self.fps_res[fps]
         return res_list.index(curr_res)
 
+    @Property(float)
+    def flip_state(self):
+        return float(self.flip)
+
+    @Property(float)
+    def gamma_state(self):
+        return float(self.gamma)
+
+    @Property(float)
+    def color_state(self):
+        return float(self.color)
+
     @Slot(str, str)
     def set_mode(self, fps, resolution):
         self.stop()
@@ -220,7 +237,7 @@ class Camera(QQuickImageProvider, QObject):
         self.__set_fps_modes()
         print("setting mode:", self.mode)
         if resolution not in self.fps_res[int(fps)]:
-            print("setting mode:", self.modes[int(fps)][0])
+            print("setting alternative mode:", self.modes[int(fps)][0])
             self.mode = self.modes[int(fps)][0]
         self.shared_array = self.create_shared_array(self.mode)
         self.pipe, self.child = Pipe()
@@ -263,23 +280,39 @@ class Camera(QQuickImageProvider, QObject):
             return pixmap
 
     def save_state(self):
-        with open('config/'+self.name+'config.txt', 'w') as f:
-            data =  str(self.mode[0]) + ':'
-            data += str(self.mode[1]) + ':'
-            data += str(self.mode[2]) #+ ':'
-            #data += str(self.gamma)   + ':'
-            #data += str(int(self.color)) 
-            f.write(data)
-
+        filename = os.path.join('config', f'{self.name}_config.yaml')
+        data = {}
+        data['res_v'] = self.mode[0]
+        data['res_h'] = self.mode[1]
+        data['rate'] = self.mode[2]
+        data['flip_img'] = self.flip
+        data['gamma'] = self.gamma
+        data['color'] = self.color
+        with open(filename, 'w') as f:
+            yaml.dump(data, f)
+        
     def load_state(self):
-        if os.path.isfile('config/'+self.name+'config.txt'):
-            with open('config/'+self.name+'config.txt', 'r') as f:
-                d = f.readline().split(':')
-                self.mode = (int(d[0]), int(d[1]), int(d[2]))
-
-
-
+        filename = os.path.join('config', f'{self.name}_config.yaml')
+        with open(filename, 'r') as f:
+            data = yaml.load(f, Loader=yaml.FullLoader)
+            res_v = data['res_v']
+            res_h = data['res_h']
+            rate = data['rate']
+            self.set_mode(rate, f'{res_v} x {res_h}')
+            self.set_gamma(data['gamma'])
+            self.set_color(data['color'])
+            self.flip_image(data['flip_img']) 
     
+    # def load_last_session_cam(self):
+    #     filename = os.path.join('config', 'config.yaml')
+        # with open(filename, 'r') as f:
+        #     data = yaml.load(f, Loader=yaml.FullLoader)
+        #     source = data[self.name]['source']
+        #     cam_name = data[self.name]['cam_name']
+        #     if source and cam_name:
+        #         self.set_source(source)
+        #         self.cam_name = cam_name
+
 
 
 if __name__=="__main__":

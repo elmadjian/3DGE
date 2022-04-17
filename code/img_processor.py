@@ -21,7 +21,7 @@ class ImageProcessor(Process):
         self.capturing = cap
     
     def __get_shared_np_array(self, img):
-        nparray = np.frombuffer(self.shared_array, dtype=ctypes.c_uint8) 
+        nparray = np.frombuffer(self.shared_array, dtype=ctypes.c_uint8)
         return nparray.reshape(img.shape)
 
     def __adjust_gamma(self, img, gamma):
@@ -104,7 +104,7 @@ class ImageProcessor(Process):
         gamma, color, flip = 1, True, False
         while attempt < attempts:     
             try:
-                frame = cap.get_frame(2.0)
+                frame = cap.get_frame(0.05)
                 img   = self.__adjust_gamma(frame.bgr, gamma)
                 img   = self.__cvtBlackWhite(img, color)   
                 img   = self.__flip_img(img, flip)       
@@ -112,8 +112,9 @@ class ImageProcessor(Process):
                     attempt = 0
                     shared_img = self.__get_shared_np_array(img)
                     np.copyto(shared_img, img)
-            except Exception as e:
-                traceback.print_exc()
+            except uvc.StreamError:
+                continue
+            except (uvc.InitError, AttributeError):
                 cap = self.__reset_mode(cap)
                 attempt += 1           
             if self.pipe.poll():
