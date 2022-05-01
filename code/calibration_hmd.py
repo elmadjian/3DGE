@@ -123,7 +123,7 @@ class HMDCalibrator(QObject):
                   -> [Unity] Load calibration scene -> [Python] UDP('C')
                   -> [QML] connStatus update -> [Python] self.start_calibration()
         '''
-        self.socket.settimeout(10)
+        self.socket.settimeout(5)
         try:
             self.socket.sendto('C'.encode(), (self.ip, self.port))
             response = self.socket.recv(1024).decode()
@@ -257,6 +257,7 @@ class HMDCalibrator(QObject):
             self.storer.store_calibration()
         self.stream = True
         self._freeze_models()
+        self.calibrated = True
         self.predictor = Thread(target=self.predict, args=())
         self.predictor.start()
 
@@ -283,13 +284,15 @@ class HMDCalibrator(QObject):
                     x2, y2, z2 = '{:.8f}'.format(x2), '{:.8f}'.format(y2), '{:.8f}'.format(z2)
                     msg = 'G:'+x1+':'+y1+':'+z1+':'+x2+':'+y2+':'+z2
                     self.socket.sendto(msg.encode(), (self.ip, self.port))
+                elif demand.startswith('X'):
+                    self.socket.sendto('O'.encode(), (self.ip, self.port))
             except Exception as e:
                 traceback.print_exc()
-                print("no request from HMD...", e)
-                count += 1
-                if count > 3:
-                    self.stream = False
-                    break
+                # print("no request from HMD...", e)
+                # count += 1
+                # if count > 3:
+                #     self.stream = False
+                #     break
 
     def _predict(self):
         pred = [-9,-9,-9,-9,-9,-9]

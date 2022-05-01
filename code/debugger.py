@@ -289,13 +289,15 @@ class HMDCalibrator(QObject):
                     x2, y2, z2 = '{:.8f}'.format(x2), '{:.8f}'.format(y2), '{:.8f}'.format(z2)
                     msg = 'G:'+x1+':'+y1+':'+z1+':'+x2+':'+y2+':'+z2
                     self.socket.sendto(msg.encode(), (self.ip, self.port))
+                elif demand.startswith('X'):
+                    self.socket.sendto('O'.encode(), (self.ip, self.port))
             except Exception as e:
                 traceback.print_exc()
-                print("no request from HMD...", e)
-                count += 1
-                if count > 3:
-                    self.stream = False
-                    break
+                # print("no request from HMD...", e)
+                # count += 1
+                # if count > 3:
+                #     self.stream = False
+                #     break
 
     def _predict(self):
         pred = [-9,-9,-9,-9,-9,-9]
