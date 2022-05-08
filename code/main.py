@@ -4,12 +4,23 @@ from PySide2.QtQml import QQmlApplicationEngine, qmlRegisterType
 from PySide2.QtCore import QUrl, Property, Signal, QObject, Slot
 import eye
 import videoio_uvc
-#import calibration_hmd
-import debugger as calibration_hmd
+import calibration_hmd
+import debugger
 import cv2
 import time
 import numpy as np
 import multiprocessing as mp
+import argparse
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-m',
+                        '--mode',
+                        default='normal',
+                        required=False,
+                        choices=['normal', 'debug'])
+    return parser.parse_args()
 
 
 if __name__=='__main__':
@@ -18,9 +29,13 @@ if __name__=='__main__':
     app.setOrganizationName('Cadu')
     app.setOrganizationDomain('Nowhere')
     engine = QQmlApplicationEngine()
-    
+
     videoio   = videoio_uvc.VideoIO_UVC()
-    calib_hmd = calibration_hmd.HMDCalibrator(3, 3, 21, 3) 
+    args = parse_args()
+    if args.mode == 'normal':
+        calib_hmd = calibration_hmd.HMDCalibrator(3, 3, 21, 3)     
+    else:
+        calib_hmd = debugger.HMDCalibrator(3, 3, 21, 3)       
 
     le_cam    = eye.EyeCamera('left')
     re_cam    = eye.EyeCamera('right')
@@ -34,7 +49,6 @@ if __name__=='__main__':
     engine.addImageProvider('leyeimg', le_cam)
     engine.addImageProvider('reyeimg', re_cam)
     engine.load(QUrl("../UI/qml/main.qml"))
-
 
     if not engine.rootObjects():
         sys.exit(-1)
