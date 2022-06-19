@@ -93,7 +93,7 @@ Window {
                     leftEyeGroup.video = false;
                     camManager.set_camera_source(leftEyeTitle.text, textAt(index));
                     activate_config(leftEyeDisabledOverlay, prefLeftEyeImg);
-                    enable_calibration();
+                    enable_functions();
                 }
             }
 //            Component.onCompleted: {
@@ -215,7 +215,7 @@ Window {
                     rightEyeGroup.video = false;
                     camManager.set_camera_source(rightEyeTitle.text, textAt(index));
                     activate_config(rightEyeDisabledOverlay, prefRightEyeImg);
-                    enable_calibration();
+                    enable_functions();
                 }
             }
 //            Component.onCompleted: {
@@ -295,10 +295,14 @@ Window {
         prefImg.enabled = true;
     }
 
-    function enable_calibration() {
+    function enable_functions() {
         if (prefLeftEyeImg.enabled && prefRightEyeImg.enabled) {
+            menu.enabled = true;
+            menuDisabledOverlay.opacity = 0;
             calibration.enabled = true;
             calibrationDisabledOverlay.opacity = 0;
+            recordImg.enabled = true;
+            recordDisabledOverlay.opacity = 0;
         }
     }
 
@@ -426,7 +430,7 @@ Window {
             Image {
                 id: recordImg
                 fillMode: Image.PreserveAspectFit
-                enabled: true
+                enabled: false
                 z: 1
                 sourceSize.width: 50
                 source: "../imgs/record.png"
@@ -791,6 +795,12 @@ Window {
             Image {
                 id: menu
                 fillMode: Image.PreserveAspectFit
+                z: 1
+                sourceSize.width: 50
+                source: "../imgs/menu.png"
+                Layout.preferredHeight: 50
+                sourceSize.height: 50
+                Layout.preferredWidth: 50
                 ColorOverlay {
                     id: menuDisabledOverlay
                     color: "#555555"
@@ -812,13 +822,16 @@ Window {
                     hoverEnabled: true
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
+                    onEntered: {
+                        menuOverlay.opacity = 1;
+                    }
+                    onExited: {
+                        menuOverlay.opacity = 0;
+                    }
+                    onClicked: {
+                        calibHMD.go_to_main_menu();
+                    }
                 }
-                z: 1
-                sourceSize.width: 50
-                source: "../imgs/menu.png"
-                Layout.preferredHeight: 50
-                sourceSize.height: 50
-                Layout.preferredWidth: 50
             }
             Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
             Layout.fillWidth: false

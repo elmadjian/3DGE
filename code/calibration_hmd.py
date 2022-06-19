@@ -113,6 +113,16 @@ class HMDCalibrator(QObject):
         with open(filename, 'w') as f:
             yaml.dump(data, f)
 
+    @Slot()
+    def go_to_main_menu(self):
+        try:
+            self.socket.sendto('M'.encode(), (self.ip, self.port))
+            response = self.socket.recv(1024).decode()
+            if response:
+                print("Accessing main menu")
+        except Exception as e:
+            print('Could not go to the main menu:', e)
+
     
     def connect_menu(self):
         '''

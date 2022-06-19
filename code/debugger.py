@@ -131,6 +131,16 @@ class HMDCalibrator(QObject):
         except Exception as e:
             print('Connection error:', e)
 
+    @Slot()
+    def go_to_main_menu(self):
+        try:
+            self.socket.sendto('M'.encode(), (self.ip, self.port))
+            response = self.socket.recv(1024).decode()
+            if response:
+                print("Accessing main menu")
+        except Exception as e:
+            print('Could not go to the main menu:', e)
+
 
     @Slot()
     def connect(self):
@@ -329,3 +339,4 @@ class HMDCalibrator(QObject):
     def save_session(self):
         if self.storage:
             self.storer.store_session()
+
