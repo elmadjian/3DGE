@@ -29,6 +29,7 @@ class HMDCalibrator(QObject):
         self.left_mat, self.right_mat = None, None
         self.current_target = -1
         self.leye, self.reye = None, None
+        self.eye_buf = np.ones((3,6))
         self.samples = samples_per_tgt
         self.timeout = timeout
         self.collector = None
@@ -112,6 +113,20 @@ class HMDCalibrator(QObject):
         with open(filename, 'w') as f:
             yaml.dump(data, f)
 
+    
+    def connect_menu(self):
+        '''
+        Connect to the main menu on Unity
+        '''
+        try:
+            self.socket.sendto('C'.encode(), (self.ip, self.port))
+            response = self.socket.recv(1024).decode()
+            if response:
+                print("Connected to the main menu")
+        except Exception as e:
+            print('Connection error:', e)
+
+
     @Slot()
     def connect(self):
         '''
@@ -123,7 +138,7 @@ class HMDCalibrator(QObject):
                   -> [Unity] Load calibration scene -> [Python] UDP('C')
                   -> [QML] connStatus update -> [Python] self.start_calibration()
         '''
-        self.socket.settimeout(5)
+        self.socket.settimeout(4)
         try:
             self.socket.sendto('C'.encode(), (self.ip, self.port))
             response = self.socket.recv(1024).decode()
@@ -287,13 +302,9 @@ class HMDCalibrator(QObject):
                 elif demand.startswith('X'):
                     self.socket.sendto('O'.encode(), (self.ip, self.port))
             except Exception as e:
-                traceback.print_exc()
-                # print("no request from HMD...", e)
-                # count += 1
-                # if count > 3:
-                #     self.stream = False
-                #     break
+                self.connect_menu()
 
+    
     def _predict(self):
         pred = [-9,-9,-9,-9,-9,-9]
         if self.left_mat is not None:
@@ -306,7 +317,17 @@ class HMDCalibrator(QObject):
             if re is not None:
                 r_transform = np.dot(self.right_mat, re[:3])
                 pred[3], pred[4], pred[5] = r_transform
+        pred = self._get_smoothed_eye(pred)
         return pred
+
+    
+    def _get_smoothed_eye(self, pred):
+        if pred == [-9,-9,-9,-9,-9,-9]:
+            pred = self.eye_buf[-1]
+        self.eye_buf = np.vstack((self.eye_buf, pred))
+        s_pred = self.eye_buf.mean(axis=0)
+        self.eye_buf = self.eye_buf[1:]
+        return s_pred.tolist()
 
 
     @Slot()

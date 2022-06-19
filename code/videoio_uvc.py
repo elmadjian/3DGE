@@ -89,6 +89,14 @@ class VideoIO_UVC(QObject):
     @Slot()
     def save_session_config(self):
         print('>>> Saving session configuration...')
+
+    
+    @Slot()
+    def toggle_recording(self):
+        if self.leye is not None:
+            self.leye.toggle_recording()
+        if self.reye is not None:
+            self.reye.toggle_recording()
         
 
     def __change_cameras(self, cam1, cam2, source):

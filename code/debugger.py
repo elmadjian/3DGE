@@ -119,6 +119,19 @@ class HMDCalibrator(QObject):
             yaml.dump(data, f)
 
 
+    def connect_menu(self):
+        '''
+        Connect to the main menu on Unity
+        '''
+        try:
+            self.socket.sendto('C'.encode(), (self.ip, self.port))
+            response = self.socket.recv(1024).decode()
+            if response:
+                print("Connected to the main menu")
+        except Exception as e:
+            print('Connection error:', e)
+
+
     @Slot()
     def connect(self):
         '''
@@ -130,7 +143,7 @@ class HMDCalibrator(QObject):
                   -> [Unity] Load calibration scene -> [Python] UDP('C')
                   -> [QML] connStatus update -> [Python] self.start_calibration()
         '''
-        self.socket.settimeout(5)
+        self.socket.settimeout(4)
         try:
             self.socket.sendto('C'.encode(), (self.ip, self.port))
             response = self.socket.recv(1024).decode()
@@ -140,7 +153,7 @@ class HMDCalibrator(QObject):
         except Exception as e:
             self.conn_status.emit(False)
             print("Connection error:", e)
-
+   
     
     def start_calibration(self):
         '''
@@ -292,12 +305,8 @@ class HMDCalibrator(QObject):
                 elif demand.startswith('X'):
                     self.socket.sendto('O'.encode(), (self.ip, self.port))
             except Exception as e:
-                traceback.print_exc()
-                # print("no request from HMD...", e)
-                # count += 1
-                # if count > 3:
-                #     self.stream = False
-                #     break
+                self.connect_menu()
+
 
     def _predict(self):
         pred = [-9,-9,-9,-9,-9,-9]

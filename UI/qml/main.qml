@@ -315,7 +315,7 @@ Window {
         id: playbackSettings
         x: 400
         y: 25
-        width: 110
+        width: 211
         height: 110
         label: Text {
             color:"gray"
@@ -410,11 +410,94 @@ Window {
                 }
             }
         }
+
+        ColumnLayout {
+            x: 109
+            y: 0
+            Layout.fillHeight: false
+            Text {
+                id: recordLabel
+                x: 10
+                color: "#ffffff"
+                text: qsTr("Record")
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            Image {
+                id: recordImg
+                fillMode: Image.PreserveAspectFit
+                enabled: true
+                z: 1
+                sourceSize.width: 50
+                source: "../imgs/record.png"
+                Layout.preferredHeight: 50
+                sourceSize.height: 50
+                Layout.preferredWidth: 50
+                states: [
+                    State {
+                        name: "stalled"
+                        PropertyChanges {
+                            target: recordImg
+                            source: "../imgs/record.png"
+                        }
+                    },
+                    State {
+                        name: "recording"
+                        PropertyChanges {
+                            target: recordImg
+                            source: "../imgs/record.png"
+                        }
+                    }
+                ]
+                Component.onCompleted: state = "stalled";
+                ColorOverlay {
+                    id: recordDisabledOverlay
+                    color: "#555555"
+                    source: recordImg
+                    anchors.fill: recordImg
+                    opacity: 1
+                }
+
+                ColorOverlay {
+                    id: recordOverlay
+                    color: "#ffffff"
+                    source: recordImg
+                    anchors.fill: recordImg
+                    opacity: 0
+                }
+
+                MouseArea {
+                    id: recordBtn
+                    hoverEnabled: true
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onEntered: {
+                        recordOverlay.opacity = 1
+                    }
+                    onExited: {
+                        recordOverlay.opacity = 0
+                    }
+                    onClicked: {
+                        if (recordImg.state == "stalled") {
+                            recordImg.state = "recording";
+                            recordOverlay.opacity = 1;
+                        }
+                        else if (recordImg.state == "recording") {
+                            recordImg.state = "stalled";
+                            recordOverlay.opacity = 0;
+                        }
+                        camManager.toggle_recording();
+                    }
+                }
+            }
+            Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
+            Layout.fillWidth: false
+        }
     }
 
     GroupBox {
         id: cameraSettings
-        x: 536
+        x: 645
         y: 25
         width: 223
         height: 110
@@ -692,6 +775,53 @@ Window {
                     calibHMD.toggle_storage();
                 }
             }
+        }
+
+        ColumnLayout {
+            x: 239
+            y: 0
+            Layout.fillHeight: false
+            Text {
+                id: menuLabel
+                color: "#ffffff"
+                text: qsTr("Menu")
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            Image {
+                id: menu
+                fillMode: Image.PreserveAspectFit
+                ColorOverlay {
+                    id: menuDisabledOverlay
+                    color: "#555555"
+                    source: menu
+                    anchors.fill: menu
+                    opacity: 1
+                }
+
+                ColorOverlay {
+                    id: menuOverlay
+                    color: "#ffffff"
+                    source: menu
+                    anchors.fill: menu
+                    opacity: 0
+                }
+
+                MouseArea {
+                    id: menuBtn
+                    hoverEnabled: true
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                }
+                z: 1
+                sourceSize.width: 50
+                source: "../imgs/menu.png"
+                Layout.preferredHeight: 50
+                sourceSize.height: 50
+                Layout.preferredWidth: 50
+            }
+            Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
+            Layout.fillWidth: false
         }
 
     }
