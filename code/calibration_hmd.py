@@ -129,7 +129,7 @@ class HMDCalibrator(QObject):
         Connect to the main menu on Unity
         '''
         try:
-            self.socket.sendto('C'.encode(), (self.ip, self.port))
+            self.socket.sendto('K'.encode(), (self.ip, self.port))
             response = self.socket.recv(1024).decode()
             if response:
                 print("Connected to the main menu")
