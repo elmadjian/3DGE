@@ -43,29 +43,14 @@ class Camera(QQuickImageProvider, QObject):
         self.flip = False
         self.record_video = False
         self.writer = None
-        self.video_buff = []
 
-
-    def toggle_recording(self):
-        self.create_video_writer()
-        self.record_video = not self.record_video
-
-    def create_video_writer(self):
-        stamp = dt.datetime.today().strftime('%Y%m%d-%H.%M.%S')
-        cam_log_path = 'logs/{}_{}.avi'.format(self.name, stamp)
-        #fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
-        fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        resolution = (self.mode[0], self.mode[1])
-        self.writer = cv2.VideoWriter(cam_log_path, fourcc, 60.0, resolution)    
 
     def thread_loop(self):
         while self.capturing.value:
-            time.sleep(0.005)
+            time.sleep(1/self.mode[2])
             try:
                 img = self.__get_shared_np_array()
                 img = self.process(img)
-                if img is not None and self.record_video:
-                    self.video_buff.append(img.copy())
                 self.__np_img = img
                 qimage = self.to_QPixmap(img)
                 if qimage is not None:
@@ -131,15 +116,7 @@ class Camera(QQuickImageProvider, QObject):
                 if self.cam_process.is_alive():
                     self.cam_process.terminate()
             self.cam_thread.join(1)
-            if self.record_video:
-                #self.writer.release()
-                self._write_video_to_disk()
     
-    def _write_video_to_disk(self):
-        for frame in self.video_buff:
-            self.writer.write(frame)
-        self.writer.release()
-
     def play(self, is_video):
         if is_video:
             if not self.capturing.value:
@@ -296,6 +273,11 @@ class Camera(QQuickImageProvider, QObject):
     @Slot()
     def reset(self):
         self.reset_model()
+
+    def toggle_recording(self):
+        self.record_video = not self.record_video
+        self.pipe.send("record")
+        self.pipe.send(self.record_video)  
 
     def to_QPixmap(self, img):
         if len(img.shape) == 3:

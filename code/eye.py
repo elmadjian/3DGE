@@ -19,6 +19,7 @@ class EyeCamera(camera.Camera):
         self.mode = mode
         self.cam_process = None
         self.vid_process = None
+        self.recorder_process = None
         self.shared_array = self.create_shared_array(mode)
         self.detector = Detector3D()
         self.bbox = None

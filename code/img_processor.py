@@ -1,5 +1,5 @@
 import uvc
-from multiprocessing import Process, Pipe, Array
+from multiprocessing import Process
 import traceback
 import cv2
 import sys
@@ -59,7 +59,8 @@ class ImageProcessor(Process):
                 controls_dict['Auto Exposure Mode'].value = 1
                 controls_dict['Gamma'].value = 200
             except:
-                print("Exposure settings not available for this camera.")
+                print("Exposure settings not available for this camera.") 
+
 
     def run_vid(self):
         self.capturing.value = 1
@@ -89,7 +90,6 @@ class ImageProcessor(Process):
                     color = self.pipe.recv()
                 elif msg == "flip":
                     flip = self.pipe.recv()
-
         cap.release()
         self.capturing.value = 0
 
@@ -116,6 +116,7 @@ class ImageProcessor(Process):
                 continue
             except (uvc.InitError, AttributeError):
                 cap = self.__reset_mode(cap)
+                recorder = self._get_recorder(cap.frame_mode)
                 attempt += 1           
             if self.pipe.poll():
                 msg = self.pipe.recv()
@@ -130,6 +131,7 @@ class ImageProcessor(Process):
         self.capturing.value = 0
         print("camera", self.source, "closed")
 
+    
     def reset_center_axis(self):
         return None
     

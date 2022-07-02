@@ -20,6 +20,7 @@ Window {
         console.log("closing window");
         calibHMD.save_session();
         if (leftEyeGroup.video || rightEyeGroup.video) {
+            calibHMD.stop();
             camManager.stop_cameras(true);
         } else {
             camManager.stop_cameras(false);

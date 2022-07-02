@@ -340,3 +340,8 @@ class HMDCalibrator(QObject):
         if self.storage:
             self.storer.store_session()
 
+    @Slot()
+    def stop(self):
+        self.stream = False
+        self.predictor.join(5)
+
