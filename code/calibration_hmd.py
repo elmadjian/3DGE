@@ -262,29 +262,34 @@ class HMDCalibrator(QObject):
         
         workflow: -> [Python] np.linalg.lstsq() -> [Python] self._freeze_models()
                   -> [Python] self.predict() (threaded)
-        '''       
-        if self.leye.is_cam_active(): 
-            l_tgt = self.storer.get_l_targets_list()
-            l_norm = self.storer.get_l_centers_list()
-            row_1 = np.linalg.lstsq(l_norm, l_tgt.T[0,:])[0]
-            row_2 = np.linalg.lstsq(l_norm, l_tgt.T[1,:])[0]
-            row_3 = np.linalg.lstsq(l_norm, l_tgt.T[2,:])[0]
-            self.left_mat = np.vstack((row_1, row_2, row_3))
-        if self.reye.is_cam_active():
-            r_tgt = self.storer.get_r_targets_list()
-            r_norm = self.storer.get_r_centers_list()
-            row_1 = np.linalg.lstsq(r_norm, r_tgt.T[0,:])[0]
-            row_2 = np.linalg.lstsq(r_norm, r_tgt.T[1,:])[0]
-            row_3 = np.linalg.lstsq(r_norm, r_tgt.T[2,:])[0]
-            self.right_mat = np.vstack((row_1, row_2, row_3))
-        print("Gaze estimation finished")
-        if self.storage:
-            self.storer.store_calibration()
-        self.stream = True
-        self._freeze_models()
-        self.calibrated = True
-        self.predictor = Thread(target=self.predict, args=())
-        self.predictor.start()
+        '''
+        try:       
+            if self.leye.is_cam_active(): 
+                l_tgt = self.storer.get_l_targets_list()
+                l_norm = self.storer.get_l_centers_list()
+                row_1 = np.linalg.lstsq(l_norm, l_tgt.T[0,:])[0]
+                row_2 = np.linalg.lstsq(l_norm, l_tgt.T[1,:])[0]
+                row_3 = np.linalg.lstsq(l_norm, l_tgt.T[2,:])[0]
+                self.left_mat = np.vstack((row_1, row_2, row_3))
+            if self.reye.is_cam_active():
+                r_tgt = self.storer.get_r_targets_list()
+                r_norm = self.storer.get_r_centers_list()
+                row_1 = np.linalg.lstsq(r_norm, r_tgt.T[0,:])[0]
+                row_2 = np.linalg.lstsq(r_norm, r_tgt.T[1,:])[0]
+                row_3 = np.linalg.lstsq(r_norm, r_tgt.T[2,:])[0]
+                self.right_mat = np.vstack((row_1, row_2, row_3))
+            print("Gaze estimation finished")
+            if self.storage:
+                self.storer.store_calibration()
+            self.stream = True
+            #self._freeze_models()
+            self.calibrated = True
+            self.predictor = Thread(target=self.predict, args=())
+            self.predictor.start()
+        except Exception as e:
+            print("Calibration failed. Please try again...")
+
+
 
 
     def predict(self):
