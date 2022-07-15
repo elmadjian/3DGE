@@ -117,7 +117,7 @@ class HMDCalibrator(QObject):
     def go_to_main_menu(self):
         try:
             self.socket.sendto('M'.encode(), (self.ip, self.port))
-            response = self.socket.recv(1024).decode()
+            response = self.socket.recv(256).decode()
             if response:
                 print("Accessing main menu")
         except Exception as e:
@@ -130,7 +130,7 @@ class HMDCalibrator(QObject):
         '''
         try:
             self.socket.sendto('K'.encode(), (self.ip, self.port))
-            response = self.socket.recv(1024).decode()
+            response = self.socket.recv(256).decode()
             if response:
                 print("Connected to the main menu")
         except Exception as e:
@@ -151,7 +151,7 @@ class HMDCalibrator(QObject):
         self.socket.settimeout(4)
         try:
             self.socket.sendto('C'.encode(), (self.ip, self.port))
-            response = self.socket.recv(1024).decode()
+            response = self.socket.recv(256).decode()
             if response:
                 self.conn_status.emit(True)
                 self.start_calibration()
@@ -218,7 +218,7 @@ class HMDCalibrator(QObject):
         '''
         msg = 'R'.encode()
         self.socket.sendto(msg, (self.ip, self.port))
-        vecs = self.socket.recv(1024).decode()
+        vecs = self.socket.recv(256).decode()
         self.collector = Thread(target=self._get_target_data, args=(vecs,minfq,maxfq,))
         self.collector.start()
 
@@ -235,22 +235,25 @@ class HMDCalibrator(QObject):
         idx = self.current_target
         t = time.time()
         lct, rct = self.storer.l_centers, self.storer.r_centers
-        vecs = re.sub('\(', '', vecs)
-        vecs = re.sub('\)', '', vecs)
-        _, l_vec, r_vec = vecs.split(';')
-        self.storer.l_targets[idx] = np.array([float(v) for v in l_vec.split(',')])
-        self.storer.r_targets[idx] = np.array([float(v) for v in r_vec.split(',')])
+        try:
+            vecs = re.sub('\(', '', vecs)
+            vecs = re.sub('\)', '', vecs)
+            _, l_vec, r_vec = vecs.split(';')
+            self.storer.l_targets[idx] = np.array([float(v) for v in l_vec.split(',')])
+            self.storer.r_targets[idx] = np.array([float(v) for v in r_vec.split(',')])
 
-        while (len(lct[idx]) < self.samples) and (len(rct[idx]) < self.samples)\
-        and (time.time()-t < self.timeout):
-            self.storer.collect_data(idx, minfreq)
-            lct, rct = self.storer.l_centers, self.storer.r_centers
-            time.sleep(1/maxfreq)
-        self.move_on.emit()
-        print("number of samples collected: l->{}, r->{}".format(
-            len(self.storer.l_centers[idx]),
-            len(self.storer.r_centers[idx])))
-        self.storer.replace_by_median(idx)
+            while (len(lct[idx]) < self.samples) and (len(rct[idx]) < self.samples)\
+            and (time.time()-t < self.timeout):
+                self.storer.collect_data(idx, minfreq)
+                lct, rct = self.storer.l_centers, self.storer.r_centers
+                time.sleep(1/maxfreq)
+            self.move_on.emit()
+            print("number of samples collected: l->{}, r->{}".format(
+                len(self.storer.l_centers[idx]),
+                len(self.storer.r_centers[idx])))
+            self.storer.replace_by_median(idx)
+        except Exception as e:
+            print('Error: could not get target data!')
 
 
     @Slot()
@@ -282,14 +285,12 @@ class HMDCalibrator(QObject):
             if self.storage:
                 self.storer.store_calibration()
             self.stream = True
-            #self._freeze_models()
+            self._freeze_models()
             self.calibrated = True
             self.predictor = Thread(target=self.predict, args=())
             self.predictor.start()
         except Exception as e:
             print("Calibration failed. Please try again...")
-
-
 
 
     def predict(self):
@@ -305,7 +306,7 @@ class HMDCalibrator(QObject):
         count = 0
         while self.stream:
             try:
-                demand = self.socket.recv(1024).decode()
+                demand = self.socket.recv(256).decode()
                 if demand.startswith('G'):
                     data = self._predict()
                     x1, y1, z1 = data[0], data[1], data[2]
@@ -317,6 +318,7 @@ class HMDCalibrator(QObject):
                 elif demand.startswith('X'):
                     self.socket.sendto('O'.encode(), (self.ip, self.port))
             except Exception as e:
+                print('Exception:', e)
                 self.connect_menu()
 
     
@@ -340,7 +342,7 @@ class HMDCalibrator(QObject):
         if pred == [-9,-9,-9,-9,-9,-9]:
             pred = self.eye_buf[-1]
         self.eye_buf = np.vstack((self.eye_buf, pred))
-        s_pred = self.eye_buf.mean(axis=0)
+        s_pred = np.median(self.eye_buf, axis=0)
         self.eye_buf = self.eye_buf[1:]
         return s_pred.tolist()
 

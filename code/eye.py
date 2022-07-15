@@ -11,7 +11,9 @@ import ctypes
 import uvc
 #from pupil_detectors import Detector3D, Roi
 from pupil_detectors import Detector2D
-from pye3d.detector_3d import CameraModel, Detector3D, DetectorMode
+from pye3d.detector_3d import CameraModel, Detector3D, DetectorMode,\
+                              Prediction
+
 
 
 class EyeCamera(camera.Camera):
@@ -31,6 +33,7 @@ class EyeCamera(camera.Camera):
         #self.detector.update_properties({'2d':{'pupil_size_max':180}})
         #self.detector.update_properties({'2d':{'pupil_size_min':10}})
         self.countdown = 5
+        self.update = True
 
     def init_process(self, source, pipe, array, mode, cap):
         mode = self.check_mode_availability(source, mode)
@@ -72,11 +75,11 @@ class EyeCamera(camera.Camera):
         timestamp = uvc.get_time_monotonic()
         result_2d = self.detector_2d.detect(gray)
         result_2d['timestamp'] = timestamp
-        result = self.detector_3d.update_and_detect(result_2d, gray)
-        if result["model_confidence"] > 0.25:
+        result = self.update_and_detect(result_2d, gray, update=self.update)
+        if result["model_confidence"] > 0.5:
             sphere = result["projected_sphere"]
             self.__draw_ellipse(sphere, img, (255,120,120), 1) 
-        if result["confidence"] > 0.5:
+        if result["confidence"] > 0.7:
             n = np.array(result['circle_3d']['normal']) 
             self.__draw_tracking_info(result, img)
             self.pos = np.array([n[0], n[1], n[2], time.monotonic()])
@@ -87,11 +90,33 @@ class EyeCamera(camera.Camera):
                 self.pos = None
         return img
 
+
+    def update_and_detect(self, pupil_datum, frame, 
+           apply_refraction_correction=True, update=True):
+        observation = self.detector_3d._extract_observation(pupil_datum)
+        if update:
+            self.detector_3d.update_models(observation)
+        sphere_center = self.detector_3d.long_term_model.sphere_center
+        pupil_circle = self.detector_3d._predict_pupil_circle(observation, frame)
+        prediction_uncorrected = Prediction(sphere_center, pupil_circle)
+        if apply_refraction_correction:
+            pupil_circle = self.detector_3d.long_term_model.apply_refraction_correction(
+                pupil_circle
+            )
+            sphere_center = self.detector_3d.long_term_model.corrected_sphere_center
+        prediction_corrected = Prediction(sphere_center, pupil_circle)
+        result = self.detector_3d._prepare_result(
+            observation,
+            prediction_uncorrected=prediction_uncorrected,
+            prediction_corrected=prediction_corrected,
+        )
+        return result
+
     def freeze_model(self):
-        self.detector_3d.is_long_term_model_frozen = True
+        self.update = False
 
     def unfreeze_model(self):
-        self.detector_3d.is_long_term_model_frozen = False
+        self.update = True
     
     def __draw_tracking_info(self, result, img, color=(255,120,120)):
         ellipse = result["ellipse"]
